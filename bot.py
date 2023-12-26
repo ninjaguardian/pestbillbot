@@ -87,9 +87,9 @@ print("Github:",gitver)
 
 def restartpythonscript():
     print("argv was",sys.argv)
-    print("sys.executable was", sys.executable)
+    print(f"sys.executable was {sys.executable}")
     print("restart now")
-    os.execv(sys.executable, ['python'] + sys.argv)
+    os.execv(f'{sys.executable}', ['python'] + sys.argv)
 
 gitverparsed = parse(gitver)
 verparsed = parse(ver)
