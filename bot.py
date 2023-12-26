@@ -1,4 +1,4 @@
-system = "pc" #solar,pc,pi
+system = "pi" #solar,pc,pi
 
 if system == "pc":
     EVENTIMAGELOC = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/eventimage.png'
