@@ -1,4 +1,4 @@
-#VERSION - 1.0.2
+#VERSION - 1.0.1
 
 
 import os
@@ -89,7 +89,7 @@ def restartpythonscript():
     print("argv was",sys.argv)
     print(f"sys.executable was {sys.executable}")
     print("restart now")
-    os.execv(f'{sys.executable}', ['python'] + sys.argv)
+    os.execv(f"'{sys.executable}'", ['python'] + sys.argv)
 
 gitverparsed = parse(gitver)
 verparsed = parse(ver)
