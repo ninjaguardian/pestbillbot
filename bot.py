@@ -1,3 +1,5 @@
+#VERSION - 1.0.1
+
 system = "pi" #solar,pc,pi
 
 if system == "pc":
