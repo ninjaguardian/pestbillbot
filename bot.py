@@ -1,4 +1,4 @@
-#VERSION - 1.0.1
+#VERSION - 1.1.0
 
 
 import os
@@ -99,7 +99,7 @@ if gitverparsed>verparsed:
         f.write(decoded)
     print("Downloaded new bot.py")
     restartpythonscript()
-    # exit("New version ran")
+    exit("New version ran")
 elif verparsed>=gitverparsed:
     print("Keep bot.py")
 else:
@@ -107,7 +107,6 @@ else:
   
 #--------------------------------------------------------------------------------------------------
 
-print("SUCESS!")
 
 #/topkdr
 
