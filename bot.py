@@ -1,7 +1,22 @@
-#VERSION - 1.0.10
+#VERSION - 1.0.0
 
-system = "pi" #solar,pc,pi
 
+import os
+if os.path.isfile('C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'):
+    botpyloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'
+    system = "pc"
+elif os.path.isfile('/home/plum-pi/Desktop/bot.py'):
+    botpyloc = '/home/plum-pi/Desktop/bot.py'
+    system = "pi"
+elif os.path.isfile('/home/container/bot.py'):
+    botpyloc = '/home/container/bot.py'
+    system = "solar"
+else:
+    print("Could not detect system.")
+    exit()
+
+
+print(botpyloc)
 if system == "pc":
     EVENTIMAGELOC = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/eventimage.png'
     filecsv = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/variables.csv'
@@ -11,7 +26,6 @@ if system == "pc":
     tokenloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/BOTTOKEN.txt'
     sftpPASSloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/sftpPASS.txt'
     sftpUSERloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/sftpUSER.txt'
-    botpyloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'
     githubtokenloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/GITTOKEN.txt'
 elif system == "solar":
     EVENTIMAGELOC = '/home/container/eventimage.png'
@@ -22,7 +36,6 @@ elif system == "solar":
     tokenloc = '/home/container/BOTTOKEN.txt'
     sftpPASSloc = '/home/container/sftpPASS.txt'
     sftpUSERloc = '/home/container/sftpUSER.txt'
-    botpyloc = '/home/container/bot.py'
     githubtokenloc = '/home/container/GITTOKEN.txt'
 elif system == "pi":
     EVENTIMAGELOC = '/home/plum-pi/Desktop/eventimage.png'
@@ -33,11 +46,12 @@ elif system == "pi":
     tokenloc = '/home/plum-pi/Desktop/BOTTOKEN.txt'
     sftpPASSloc = '/home/plum-pi/Desktop/sftpPASS.txt'
     sftpUSERloc = '/home/plum-pi/Desktop/sftpUSER.txt'
-    botpyloc = '/home/plum-pi/Desktop/bot.py'
     githubtokenloc = '/home/plum-pi/Desktop/GITTOKEN.txt'
 else:
     print("system is not valid!")
     exit()
+
+
 
 
 
@@ -54,6 +68,8 @@ print("Current:",ver)
 
 
 from github import Github
+from packaging.version import Version, parse
+import sys
 with open(githubtokenloc, 'r') as f:
     g = Github(f.read())
 
@@ -69,22 +85,23 @@ for gitcur in range(len(decoded_firstline)-offset):
     gitver = gitver+decoded_firstline[gitcur+offset]
 print("Github:",gitver)
 
-if gitver>ver:
+gitverparsed = parse(gitver)
+verparsed = parse(ver)
+
+if gitverparsed>verparsed:
     print("Downloading....")
     with open(botpyloc, 'wb') as f:
         f.write(decoded)
     print("Downloaded new bot.py")
-elif ver>gitver:
+    os.execv(sys.argv[0], sys.argv)
+    # exit("New version ran")
+elif verparsed>=gitverparsed:
     print("Keep bot.py")
-elif ver == gitver:
-    print("Github has the same bot.py")
 else:
     print("Error getting version")
   
 #--------------------------------------------------------------------------------------------------
 
-
-print("running 1.0.9")
 
 #/topkdr
 
@@ -96,7 +113,6 @@ from datetime import datetime
 import csv
 import pysftp
 import codecs
-import os
 import io
 import aiohttp
 import aiofiles
