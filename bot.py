@@ -1,4 +1,4 @@
-#VERSION - 1.0.1
+#VERSION - 1.0.3
 
 system = "pi" #solar,pc,pi
 
@@ -8,30 +8,83 @@ if system == "pc":
     eventembedcolorloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/eventembedcolor.txt'
     eventloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/event.txt'
     PESTBILL_VARcsv = '/server/plugins/Skript/variables.csv'
-    tokenloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/TOKEN.txt'
+    tokenloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/BOTTOKEN.txt'
     sftpPASSloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/sftpPASS.txt'
     sftpUSERloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/sftpUSER.txt'
+    botpyloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'
+    githubtokenloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/GITTOKEN.txt'
 elif system == "solar":
     EVENTIMAGELOC = '/home/container/eventimage.png'
     filecsv = '/home/container/variables.csv'
     eventembedcolorloc = '/home/container/eventembedcolor.txt'
     eventloc = '/home/container/event.txt'
     PESTBILL_VARcsv = '/server/plugins/Skript/variables.csv'
-    tokenloc = '/home/container/TOKEN.txt'
+    tokenloc = '/home/container/BOTTOKEN.txt'
     sftpPASSloc = '/home/container/sftpPASS.txt'
     sftpUSERloc = '/home/container/sftpUSER.txt'
+    botpyloc = '/home/container/bot.py'
+    githubtokenloc = '/home/container/GITTOKEN.txt'
 elif system == "pi":
     EVENTIMAGELOC = '/home/plum-pi/Desktop/eventimage.png'
     filecsv = '/home/plum-pi/Desktop/variables.csv'
     eventembedcolorloc = '/home/plum-pi/Desktop/eventembedcolor.txt'
     eventloc = '/home/plum-pi/Desktop/event.txt'
     PESTBILL_VARcsv = '/server/plugins/Skript/variables.csv'
-    tokenloc = '/home/plum-pi/Desktop/TOKEN.txt'
+    tokenloc = '/home/plum-pi/Desktop/BOTTOKEN.txt'
     sftpPASSloc = '/home/plum-pi/Desktop/sftpPASS.txt'
     sftpUSERloc = '/home/plum-pi/Desktop/sftpUSER.txt'
+    botpyloc = '/home/plum-pi/Desktop/bot.py'
+    githubtokenloc = '/home/plum-pi/Desktop/GITTOKEN.txt'
 else:
     print("system is not valid!")
     exit()
+
+
+
+#--------------------------------------------------------------------------------------------------
+offset = 11
+
+with open(botpyloc, 'r') as f:
+    curline = f.readline()
+    ver = ''
+    for cur in range(len(curline)-offset-1):
+        ver = ver+curline[cur+offset]
+print("Current:",ver)
+
+
+
+from github import Github
+with open(githubtokenloc, 'r') as f:
+    g = Github(f.read())
+
+repo = g.get_repo('ninjaguardian/pestbillbot')
+
+contents = repo.get_contents('bot.py')
+
+decoded = contents.decoded_content
+decoded_str = decoded.decode("UTF-8")
+decoded_firstline = decoded_str.splitlines()[0]
+gitver = ''
+for gitcur in range(len(decoded_firstline)-offset):
+    gitver = gitver+decoded_firstline[gitcur+offset]
+print("Github:",gitver)
+
+if gitver>ver:
+    print("Downloading....")
+    with open(botpyloc, 'wb') as f:
+        f.write(decoded)
+    print("Downloaded new bot.py")
+elif ver>gitver:
+    print("Keep bot.py")
+elif ver == gitver:
+    print("Github has the same bot.py")
+else:
+    print("Error getting version")
+  
+#--------------------------------------------------------------------------------------------------
+
+
+    
 
 #/topkdr
 
