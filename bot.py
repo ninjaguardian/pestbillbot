@@ -1,4 +1,4 @@
-#VERSION - 1.0.1
+#VERSION - 1.0.2
 
 
 import os
@@ -87,13 +87,12 @@ print("Github:",gitver)
 
 gitverparsed = parse(gitver)
 verparsed = parse(ver)
-
 if gitverparsed>verparsed:
     print("Downloading....")
     with open(botpyloc, 'wb') as f:
         f.write(decoded)
     print("Downloaded new bot.py")
-    os.execv(sys.argv[0], sys.argv)
+    os.execv(sys.argv[0])
     # exit("New version ran")
 elif verparsed>=gitverparsed:
     print("Keep bot.py")
