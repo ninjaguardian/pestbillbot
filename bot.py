@@ -1,4 +1,4 @@
-#VERSION - 1.0.1
+#VERSION - 1.0.2
 
 
 import os
@@ -85,6 +85,12 @@ for gitcur in range(len(decoded_firstline)-offset):
     gitver = gitver+decoded_firstline[gitcur+offset]
 print("Github:",gitver)
 
+def restartpythonscript():
+    print("argv was",sys.argv)
+    print("sys.executable was", sys.executable)
+    print("restart now")
+    os.execv(sys.executable, ['python'] + sys.argv)
+
 gitverparsed = parse(gitver)
 verparsed = parse(ver)
 if gitverparsed>verparsed:
@@ -92,7 +98,7 @@ if gitverparsed>verparsed:
     with open(botpyloc, 'wb') as f:
         f.write(decoded)
     print("Downloaded new bot.py")
-    os.execv(botpyloc, [sys.executable, __file__] + sys.argv)
+    restartpythonscript()
     # exit("New version ran")
 elif verparsed>=gitverparsed:
     print("Keep bot.py")
