@@ -16,7 +16,7 @@ else:
     exit()
 
 
-print(botpyloc)
+print("System:",system)
 if system == "pc":
     EVENTIMAGELOC = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/eventimage.png'
     filecsv = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/variables.csv'
