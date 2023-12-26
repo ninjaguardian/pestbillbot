@@ -70,9 +70,9 @@ print("Current:",ver)
 from github import Github
 from packaging.version import Version, parse
 import sys
+import subprocess
 with open(githubtokenloc, 'r') as f:
     g = Github(f.read())
-
 repo = g.get_repo('ninjaguardian/pestbillbot')
 
 contents = repo.get_contents('bot.py')
@@ -89,7 +89,7 @@ def restartpythonscript():
     print("argv was",sys.argv)
     print(f"sys.executable was {sys.executable}")
     print("restart now")
-    os.execv("C:\Users\carte\AppData\Local\Programs\Python\Python311\python.exe", ['python'] + ['c:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'])
+    subprocess.call(["python", os.path.join(sys.path[0], __file__)] + sys.argv[1:])
 
 gitverparsed = parse(gitver)
 verparsed = parse(ver)
