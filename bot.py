@@ -89,7 +89,7 @@ def restartpythonscript():
     print("argv was",sys.argv)
     print(f"sys.executable was {sys.executable}")
     print("restart now")
-    os.execv(sys.executable, ['python'] + sys.argv)
+    os.execv("C:\Users\carte\AppData\Local\Programs\Python\Python311\python.exe", ['python'] + ['c:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'])
 
 gitverparsed = parse(gitver)
 verparsed = parse(ver)
