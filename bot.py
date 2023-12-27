@@ -1,4 +1,4 @@
-#VERSION - 1.2.0
+#VERSION - 1.2.1
 
 
 import os
@@ -244,9 +244,9 @@ async def run_blocking(blocking_func: typing.Callable) -> typing.Any:
 #Boot message
 @bot.event
 async def on_ready():
-    print("Bot is ready")
+    print(f"Bot is ready (Version {ver})")
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-    await channel.send("Bot is ready")
+    await channel.send(f"Bot is ready (Version {ver})")
 
     try:
         synced = await bot.tree.sync()
