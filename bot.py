@@ -1,4 +1,4 @@
-#VERSION - 1.1.4
+#VERSION - 1.1.5
 
 
 import os
@@ -221,14 +221,15 @@ async def updateandrestartbot():
             f.write(decoded)
             await channel.send(f"Downloaded and restarting. {ver}>{gitver}")
         print("Downloaded new bot.py")
-        restartpythonscript()
-        exit("New version ran")
+        return True
     elif verparsed>=gitverparsed:
         print("Keep bot.py")
         await channel.send(f"No new version found ||Github: {gitver}   Current: {ver}||")
+        return False
     else:
         await channel.send("Error getting version")
         print("Error getting version")
+        return False
 
 
 
@@ -340,7 +341,9 @@ async def updatebot(ctx):
    await ctx.response.send_message("Updating and restarting bot!", ephemeral=True)
    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
    await channel.send("Updating and restarting bot!")
-   await updateandrestartbot()
+   if await updateandrestartbot() is True:
+        restartpythonscript()
+        exit("New version ran")
 
 @updatebot.error
 async def updatebot_error(interaction: discord.Interaction, error):
