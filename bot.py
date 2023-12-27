@@ -1,4 +1,4 @@
-#VERSION - 1.1.3
+#VERSION - 1.1.4
 
 
 import os
@@ -15,6 +15,7 @@ else:
     print("Could not detect system.")
     exit()
 
+#/topkdr soon?
 
 print("System:",system)
 if system == "pc":
