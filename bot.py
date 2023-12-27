@@ -235,9 +235,9 @@ def updateandrestartbot():
         print("Error getting version")
         return False
 
-async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typing.Any:
+async def run_blocking(blocking_func: typing.Callable) -> typing.Any:
     """Runs a blocking function in a non-blocking way"""
-    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    func = functools.partial(blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)
 
 
