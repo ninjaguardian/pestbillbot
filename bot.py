@@ -1,4 +1,4 @@
-#VERSION - 1.1.6
+#VERSION - 1.1.7
 
 
 import os
@@ -120,6 +120,8 @@ import codecs
 import io
 import aiohttp
 import aiofiles
+import functools
+import typing
 host = 'ftp.minehut.com'
 port = 2223
 with open(sftpUSERloc, 'r') as f:
@@ -233,6 +235,10 @@ def updateandrestartbot():
         print("Error getting version")
         return False
 
+async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typing.Any:
+    """Runs a blocking function in a non-blocking way"""
+    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    return await bot.loop.run_in_executor(None, func)
 
 
 #Boot message
@@ -337,13 +343,22 @@ async def shutdown_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 
+#REMOVE
+async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typing.Any:
+    """Runs a blocking function in a non-blocking way"""
+    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    return await bot.loop.run_in_executor(None, func)
+#REMOVE
+
 @bot.tree.command(description="Updates bot.py and restarts bot")
 @app_commands.check(is_server_owner)
 async def updatebot(ctx):
    await ctx.response.send_message("Updating and restarting bot!", ephemeral=True)
    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
    await channel.send("Updating and restarting bot!")
-   updateandrestartbot()
+   await run_blocking(updateandrestartbot, None, None)
+   await ctx.response.edit_original_response("Updated? Maybe?", ephemeral=True)
+   
 
 @updatebot.error
 async def updatebot_error(interaction: discord.Interaction, error):
