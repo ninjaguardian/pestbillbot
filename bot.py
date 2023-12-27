@@ -1,4 +1,4 @@
-#VERSION - 1.1.1
+#VERSION - 1.1.2
 
 
 import os
@@ -182,6 +182,55 @@ def minutefix():
         return "0"+str(datetime.now().minute)
     else:
         return datetime.now().minute
+    
+
+async def updateandrestartbot():
+    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+    await channel.send("Checking for updates... (getting current version)")
+
+    offset = 11
+
+    with open(botpyloc, 'r') as f:
+        curline = f.readline()
+        ver = ''
+        for cur in range(len(curline)-offset-1):
+            ver = ver+curline[cur+offset]
+    print("Current:",ver)
+    await channel.send(f"Found {ver}\nChecking for updates... (connecting to github)")
+
+    with open(githubtokenloc, 'r') as f:
+        g = Github(f.read())
+    repo = g.get_repo('ninjaguardian/pestbillbot')
+
+    contents = repo.get_contents('bot.py')
+
+    decoded = contents.decoded_content
+    decoded_str = decoded.decode("UTF-8")
+    await channel.send("Checking for updates... (getting github version)")
+    decoded_firstline = decoded_str.splitlines()[0]
+    gitver = ''
+    for gitcur in range(len(decoded_firstline)-offset):
+        gitver = gitver+decoded_firstline[gitcur+offset]
+    print("Github:",gitver)
+    await channel.send(f"Found {gitver}")
+    gitverparsed = parse(gitver)
+    verparsed = parse(ver)
+    if gitverparsed>verparsed:
+        await channel.send(f"Found new version: {gitver}")
+        print("Downloading....")
+        with open(botpyloc, 'wb') as f:
+            f.write(decoded)
+            await channel.send(f"Downloaded and restarting. {ver}>{gitver}")
+        print("Downloaded new bot.py")
+        restartpythonscript()
+        exit("New version ran")
+    elif verparsed>=gitverparsed:
+        print("Keep bot.py")
+        await channel.send(f"No new version found ||Github: {gitver}   Current: {ver}||")
+    else:
+        await channel.send("Error getting version")
+        print("Error getting version")
+
 
 
 #Boot message
@@ -286,6 +335,20 @@ async def shutdown_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 
+@bot.tree.command(description="Updates bot.py and restarts bot")
+@app_commands.check(is_server_owner)
+async def updatebot(ctx):
+   await ctx.response.send_message("Updating and restarting bot!", ephemeral=True)
+   channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+   await channel.send("Updating and restarting bot!")
+   updateandrestartbot()
+
+@updatebot.error
+async def updatebot_error(interaction: discord.Interaction, error):
+    if interaction.user.id == interaction.guild.owner_id:
+        await interaction.response.send_message(f"idk what went wrong... {error}", ephemeral=True)
+    else:
+        await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 
 @bot.tree.command(description="Gets a player's kdr")
