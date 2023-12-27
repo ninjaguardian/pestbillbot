@@ -1,4 +1,4 @@
-#VERSION - 1.1.5
+#VERSION - 1.1.6
 
 
 import os
@@ -351,13 +351,13 @@ async def updatebot(ctx):
    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
    await channel.send("Updating and restarting bot!")
    await run_blocking(updateandrestartbot)
-   await ctx.edit_original_response("Updated? Maybe?")
+   await ctx.edit_original_response(content="Updated? Maybe?")
    
 
 @updatebot.error
 async def updatebot_error(interaction: discord.Interaction, error):
     if interaction.user.id == interaction.guild.owner_id:
-        await interaction.edit_original_response(f"idk what went wrong... {error}")
+        await interaction.edit_original_response(content=f"idk what went wrong... {error}")
     else:
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
