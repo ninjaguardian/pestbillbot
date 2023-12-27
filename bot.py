@@ -1,4 +1,4 @@
-#VERSION - 1.1.6
+#VERSION - 1.1.7
 
 
 import os
@@ -237,7 +237,7 @@ async def updateandrestartbot():
 
 async def run_blocking(blocking_func: typing.Callable) -> typing.Any:
     """Runs a blocking function in a non-blocking way"""
-    func = functools.partial(blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    func = functools.partial(await blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)
 
 
