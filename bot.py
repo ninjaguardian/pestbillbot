@@ -1,4 +1,4 @@
-#VERSION - 1.1.0
+#VERSION - 1.1.1
 
 
 import os
@@ -418,7 +418,7 @@ async def kdr(interaction: discord.Interaction, player: str):
     if topkdrnamefinal == player:
         KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('e0bd00', 16))
         KDR_EMBED.add_field(value=f'''{player}'s KDR is {round(kills/deaths,2)}!
-                            They also have the **top kdr**!''', name="KDR", inline=False)
+They also have the **top kdr**!''', name="KDR", inline=False)
     else:
         KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('fa2d1e', 16))
         KDR_EMBED.add_field(value=f"{player}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
@@ -443,9 +443,9 @@ async def kdr_error(interaction: discord.Interaction, error):
     else:
         KDR_EMBED_ERROR=discord.Embed(title=f"ERROR WHILE FETCHING KDR!", color=int('fa2d1e', 16))
         KDR_EMBED_ERROR.add_field(value='''> The player's name is CASE-SENSITIVE! Make sure you spelled it perfectly with no spaces.
-                                  > The player may have had their stats wiped due to them being low.
-                                  > The player may have not joined the game before.
-                                  > DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
+> The player may have had their stats wiped due to them being low.
+> The player may have not joined the game before.
+> DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
         await bot.get_channel(MOD_ONLY_CHANNEL_ID).send(f'''Someone had a kdr error! 
                                                         
 ctx: {interaction}
