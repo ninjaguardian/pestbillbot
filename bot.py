@@ -1,5 +1,4 @@
-#VERSION - 1.1.2
-
+#VERSION - 1.1.3
 
 import os
 if os.path.isfile('C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'):
@@ -14,7 +13,8 @@ elif os.path.isfile('/home/container/bot.py'):
 else:
     print("Could not detect system.")
     exit()
-
+    
+#/topkdr soon?
 
 print("System:",system)
 if system == "pc":
@@ -107,8 +107,6 @@ else:
   
 #--------------------------------------------------------------------------------------------------
 
-
-#/topkdr
 
 import time
 from discord.ext import commands
