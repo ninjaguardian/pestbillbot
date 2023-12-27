@@ -1,4 +1,4 @@
-#VERSION - 1.1.6
+#VERSION - 1.1.7
 
 
 import os
@@ -366,7 +366,7 @@ async def restartbot(ctx):
    await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
    await channel.send("Updating/restarting bot!")
-   restartpythonscript()
+   await run_blocking(restartpythonscript)
    
 
 @restartbot.error
