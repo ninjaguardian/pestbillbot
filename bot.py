@@ -343,12 +343,6 @@ async def shutdown_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 
-#REMOVE
-async def run_blocking(blocking_func: typing.Callable, *args, **kwargs) -> typing.Any:
-    """Runs a blocking function in a non-blocking way"""
-    func = functools.partial(blocking_func, *args, **kwargs) # `run_in_executor` doesn't support kwargs, `functools.partial` does
-    return await bot.loop.run_in_executor(None, func)
-#REMOVE
 
 @bot.tree.command(description="Updates bot.py and restarts bot")
 @app_commands.check(is_server_owner)
