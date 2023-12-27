@@ -1,4 +1,4 @@
-#VERSION - 1.1.10
+#VERSION - 1.1.3
 
 
 import os
@@ -185,9 +185,9 @@ def minutefix():
         return datetime.now().minute
     
 
-async def updateandrestartbot():
+def updateandrestartbot():
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-    await channel.send("Checking for updates... (getting current version)")
+    print("Checking for updates... (getting current version)")
 
     offset = 11
 
@@ -197,7 +197,7 @@ async def updateandrestartbot():
         for cur in range(len(curline)-offset-1):
             ver = ver+curline[cur+offset]
     print("Current:",ver)
-    await channel.send(f"Found {ver}\nChecking for updates... (connecting to github)")
+    print(f"Found {ver}\nChecking for updates... (connecting to github)")
 
     with open(githubtokenloc, 'r') as f:
         g = Github(f.read())
@@ -207,37 +207,36 @@ async def updateandrestartbot():
 
     decoded = contents.decoded_content
     decoded_str = decoded.decode("UTF-8")
-    await channel.send("Checking for updates... (getting github version)")
+    print("Checking for updates... (getting github version)")
     decoded_firstline = decoded_str.splitlines()[0]
     gitver = ''
     for gitcur in range(len(decoded_firstline)-offset):
         gitver = gitver+decoded_firstline[gitcur+offset]
     print("Github:",gitver)
-    await channel.send(f"Found {gitver}")
+    print(f"Found {gitver}")
     gitverparsed = parse(gitver)
     verparsed = parse(ver)
     if gitverparsed>verparsed:
-        await channel.send(f"Found new version: {gitver}")
+        print(f"Found new version: {gitver}")
         print("Downloading....")
         with open(botpyloc, 'wb') as f:
             f.write(decoded)
-            await channel.send(f"Downloaded and restarting. {ver}>{gitver}")
+            print(f"Downloaded and restarting. {ver}>{gitver}")
         print("Downloaded new bot.py")
         restartpythonscript()
         exit("New version ran")
         return True
     elif verparsed>=gitverparsed:
         print("Keep bot.py")
-        await channel.send(f"No new version found ||Github: {gitver}   Current: {ver}||")
+        print(f"No new version found ||Github: {gitver}   Current: {ver}||")
         return False
     else:
-        channel.send("Error getting version")
+        print("Error getting version")
         print("Error getting version")
         return False
 
 async def run_blocking(blocking_func: typing.Callable) -> typing.Any:
     """Runs a blocking function in a non-blocking way"""
-    await blocking_func
     func = functools.partial(blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)
 
