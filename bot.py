@@ -1,4 +1,4 @@
-#VERSION - 1.1.4
+#VERSION - 1.1.5
 
 
 import os
@@ -343,24 +343,39 @@ async def shutdown_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 
-
-@bot.tree.command(description="Updates bot.py and restarts bot")
-@app_commands.check(is_server_owner)
-async def updatebot(ctx):
-   await ctx.response.send_message("Updating and restarting bot!", ephemeral=True)
-   channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-   await channel.send("Updating and restarting bot!")
-   await run_blocking(updateandrestartbot)
-   await ctx.edit_original_response(content="Updated? Maybe?")
+# @bot.tree.command(description="Updates bot.py and restarts bot")
+# @app_commands.check(is_server_owner)
+# async def updatebot(ctx):
+#    await ctx.response.send_message("Updating and restarting bot!", ephemeral=True)
+#    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+#    await channel.send("Updating and restarting bot!")
+#    await run_blocking(updateandrestartbot)
+#    await ctx.edit_original_response(content="Updated? Maybe?")
    
 
-@updatebot.error
-async def updatebot_error(interaction: discord.Interaction, error):
+# @updatebot.error
+# async def updatebot_error(interaction: discord.Interaction, error):
+#     if interaction.user.id == interaction.guild.owner_id:
+#         await interaction.edit_original_response(content=f"idk what went wrong... {error}")
+#     else:
+#         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
+        
+@bot.tree.command(description="Restarts bot (also updates)")
+@app_commands.check(is_server_owner)
+async def restartbot(ctx):
+   await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
+   channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+   await channel.send("Updating/restarting bot!")
+   restartpythonscript()
+   
+
+@restartbot.error
+async def restartbot_error(interaction: discord.Interaction, error):
     if interaction.user.id == interaction.guild.owner_id:
         await interaction.edit_original_response(content=f"idk what went wrong... {error}")
     else:
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
-
+        
 
 @bot.tree.command(description="Gets a player's kdr")
 @app_commands.describe(player = "The player to check")
