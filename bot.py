@@ -1,5 +1,6 @@
 #VERSION - 1.1.3
 
+
 import os
 if os.path.isfile('C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'):
     botpyloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'
@@ -13,8 +14,7 @@ elif os.path.isfile('/home/container/bot.py'):
 else:
     print("Could not detect system.")
     exit()
-    
-#/topkdr soon?
+
 
 print("System:",system)
 if system == "pc":
@@ -339,7 +339,7 @@ async def updatebot(ctx):
    await ctx.response.send_message("Updating and restarting bot!", ephemeral=True)
    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
    await channel.send("Updating and restarting bot!")
-   updateandrestartbot()
+   await updateandrestartbot()
 
 @updatebot.error
 async def updatebot_error(interaction: discord.Interaction, error):
