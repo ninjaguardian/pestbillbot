@@ -1,4 +1,4 @@
-#VERSION - 1.1.6
+#VERSION - 1.1.5
 
 
 import os
@@ -183,9 +183,9 @@ def minutefix():
         return datetime.now().minute
     
 
-async def updateandrestartbot():
+def updateandrestartbot():
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-    await channel.send("Checking for updates... (getting current version)")
+    channel.send("Checking for updates... (getting current version)")
 
     offset = 11
 
@@ -195,7 +195,7 @@ async def updateandrestartbot():
         for cur in range(len(curline)-offset-1):
             ver = ver+curline[cur+offset]
     print("Current:",ver)
-    await channel.send(f"Found {ver}\nChecking for updates... (connecting to github)")
+    channel.send(f"Found {ver}\nChecking for updates... (connecting to github)")
 
     with open(githubtokenloc, 'r') as f:
         g = Github(f.read())
@@ -205,31 +205,31 @@ async def updateandrestartbot():
 
     decoded = contents.decoded_content
     decoded_str = decoded.decode("UTF-8")
-    await channel.send("Checking for updates... (getting github version)")
+    channel.send("Checking for updates... (getting github version)")
     decoded_firstline = decoded_str.splitlines()[0]
     gitver = ''
     for gitcur in range(len(decoded_firstline)-offset):
         gitver = gitver+decoded_firstline[gitcur+offset]
     print("Github:",gitver)
-    await channel.send(f"Found {gitver}")
+    channel.send(f"Found {gitver}")
     gitverparsed = parse(gitver)
     verparsed = parse(ver)
     if gitverparsed>verparsed:
-        await channel.send(f"Found new version: {gitver}")
+        channel.send(f"Found new version: {gitver}")
         print("Downloading....")
         with open(botpyloc, 'wb') as f:
             f.write(decoded)
-            await channel.send(f"Downloaded and restarting. {ver}>{gitver}")
+            channel.send(f"Downloaded and restarting. {ver}>{gitver}")
         print("Downloaded new bot.py")
         restartpythonscript()
         exit("New version ran")
         return True
     elif verparsed>=gitverparsed:
         print("Keep bot.py")
-        await channel.send(f"No new version found ||Github: {gitver}   Current: {ver}||")
+        channel.send(f"No new version found ||Github: {gitver}   Current: {ver}||")
         return False
     else:
-        await channel.send("Error getting version")
+        channel.send("Error getting version")
         print("Error getting version")
         return False
 
