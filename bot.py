@@ -1,4 +1,7 @@
-#VERSION - 1.2.3
+#VERSION - 1.2.4
+
+# This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
+# By ninjaguardian on github
 
 
 import os
