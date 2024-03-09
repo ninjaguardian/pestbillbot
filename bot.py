@@ -1,4 +1,4 @@
-#VERSION - 1.2.2
+#VERSION - 1.2.3
 
 
 import os
@@ -15,7 +15,6 @@ else:
     print("Could not detect system.")
     exit()
 
-#/topkdr soon?
 
 print("System:",system)
 if system == "pc":
@@ -272,6 +271,11 @@ async def on_disconnect():
 #async def hello(interaction: discord.Interaction):
 #    await interaction.response.send_message(f"Hello {interaction.user.mention}", ephemeral=True)
 
+@bot.tree.command(description="Shows the bot latency")
+async def ping(ctx):
+    SET_PING_EMBED=discord.Embed(title="Ping", color=int('1e63d4', 16))
+    SET_PING_EMBED.add_field(name="",value=f'''The bot's ping is: {bot.latency}ms''',inline=False)
+    await ctx.response.send_message(embed=SET_PING_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Gets the current pestbill event")
 async def event(ctx):
@@ -286,9 +290,9 @@ async def event(ctx):
 
 
 @bot.tree.command(description="Sets the current event")
-@app_commands.describe(event = "Set the current event", hexcolornohashtag = "Color of embed sidebar as a hex color", imageurl = "URL of the image displayed")
+@app_commands.describe(event = "Set the current event", hexcolor = "Color of embed sidebar as a hex color", imageurl = "URL of the image displayed")
 @app_commands.check(is_server_owner)
-async def setevent(ctx, event: str=None, hexcolornohashtag: str=None, imageurl: str=None):
+async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None):
     if imageurl is None:
         file = discord.File(EVENTIMAGELOC, filename='eventimage.png')
     else:        
@@ -304,20 +308,22 @@ async def setevent(ctx, event: str=None, hexcolornohashtag: str=None, imageurl: 
     if event is None:
         with open(eventloc, 'r') as f:
             event = f.read()
-    if hexcolornohashtag is None:
+    if hexcolor is None:
         with open(eventembedcolorloc, 'r') as f:
-            hexcolornohashtag = ""
+            hexcolor = ""
             hexcolornohashtagconverted = decimal_to_hexadecimal(int(f.read()))
             for curchar in range(len(hexcolornohashtagconverted)-2):
-                hexcolornohashtag = hexcolornohashtag+hexcolornohashtagconverted[curchar+2]
-    SET_EVENT_EMBED=discord.Embed(title="Event", color=int(hexcolornohashtag, 16))
-    SET_EVENT_EMBED.add_field(value=f"Set the current event to: **{event}** and the color to **{hexcolornohashtag}** ||decimal: **{int(hexcolornohashtag, 16)}**||", name="Set image manualy!!!", inline=False)
+                hexcolor = hexcolor+hexcolornohashtagconverted[curchar+2]
+    else:
+        hexcolor=hexcolor.replace("#","")
+    SET_EVENT_EMBED=discord.Embed(title="Event", color=int(hexcolor, 16))
+    SET_EVENT_EMBED.add_field(value=f"Set the current event to: **{event}** and the color to **#{hexcolor}** ||decimal: **{int(hexcolor, 16)}**||", name="Image may not work as expected.", inline=False)
     SET_EVENT_EMBED.set_thumbnail(url="attachment://eventimage.png")
     await ctx.response.send_message(file=file, embed=SET_EVENT_EMBED, ephemeral=True)
     with open(eventloc, 'w') as f:
         f.write(f'{event}')
     with open(eventembedcolorloc, 'w') as f:
-        f.write(f'{int(hexcolornohashtag, 16) }')
+        f.write(f'{int(hexcolor, 16) }')
 
 
 @setevent.error
@@ -377,11 +383,7 @@ async def restartbot_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
         
 
-@bot.tree.command(description="Gets a player's kdr")
-@app_commands.describe(player = "The player to check")
-async def kdr(interaction: discord.Interaction, player: str):
-    kdrresponsetimestart = time.time()
-    await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
+def getnewcsv():
     try:
         conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
         CONNWORKED = True
@@ -409,6 +411,61 @@ async def kdr(interaction: discord.Interaction, player: str):
             writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
             writer.writerows(read)
             print('written')
+
+@bot.tree.command(description="Gets the player with the topkdr")
+async def topkdr(interaction: discord.Interaction):
+    topkdrresponsetimestart = time.time()
+    await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
+    getnewcsv()
+    await interaction.edit_original_response(content=f"Loading... (finding topkdr)")
+    topkdrname = ''
+
+    for row in csv.reader(open(filecsv)):
+        rowstr = str(row)
+        if not rowstr.find("topkdrname") == -1:
+            for i in range(32,len(rowstr)-2):
+                #print(rowstr[i])
+                topkdrname = topkdrname+rowstr[i]
+    topkdrnameencode = topkdrname.encode('utf-8')
+    topkdrnamefinal = hex_to_ascii(decode_encoded_string(topkdrnameencode, 'utf-8'))
+    await interaction.edit_original_response(content=f"Loading... (getting {topkdrnamefinal}'s data)")
+    embedout= await getkdr_nonbot(topkdrnamefinal,interaction)
+    topkdrresponsetimeend = time.time()-topkdrresponsetimestart
+    await interaction.edit_original_response(content=f"Time taken ≈ {topkdrresponsetimeend} seconds",embed=embedout)
+
+@bot.tree.command(description="Gets a player's kdr")
+@app_commands.describe(player = "The player to check")
+async def kdr(interaction: discord.Interaction, player: str):
+    kdrresponsetimestart = time.time()
+    await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
+    # try:
+    #     conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
+    #     CONNWORKED = True
+    #     print("connection established successfully")
+    # except: 
+    #     CONNWORKED = False
+    #     print('failed to establish connection to targeted server')
+    # if CONNWORKED is True:
+    #     current_dir = conn.pwd
+    #     print('our current working directory is: ',current_dir)
+    #     print('available list of directories: ',conn.listdir())
+    #     if os.path.exists(filecsv):
+    #         print("file removed")
+    #         os.remove(filecsv)
+    #     conn.get(PESTBILL_VARcsv, localpath=filecsv)
+    #     print("new file got")
+    #     read = []
+    #     with open(filecsv, 'r') as f:
+    #         reader = csv.reader(f)
+    #         for line in reader:
+    #             read.append(line)
+    #         print("read new file")
+    #     with open(filecsv, 'w', newline='') as f:
+    #         writer = csv.writer(f)
+    #         writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
+    #         writer.writerows(read)
+    #         print('written')
+    getnewcsv()
 
     await interaction.edit_original_response(content=f"Loading... (getting {player}'s data)")
 #____________________________________________
@@ -546,29 +603,128 @@ error: {error}''')
 
 
 
+async def getkdr_nonbot(player: str,input_interaction: discord.Interaction):
+    playerhex = player.encode('utf-8').hex()
+    playerhexfix = ""
+    PHLEN = 0
+    for i in playerhex:
+        PHLEN = PHLEN+1
+    #PHLENHALF = int(PHLEN/2)
+    #print(f"{PHLEN}/2={PHLENHALF}")
+    # CURRENTVALUEPHFIX = 0
+    # for i in range(PHLENHALF):
+    #     if '6a' in playerhex[CURRENTVALUEPHFIX]+playerhex[CURRENTVALUEPHFIX+1]:
+    #         playerhexfix = playerhexfix+"4a"
+    #     else:              #6a and 4a are j and J
+    #         playerhexfix = playerhexfix+str(playerhex[CURRENTVALUEPHFIX]+playerhex[CURRENTVALUEPHFIX+1])
+    #     CURRENTVALUEPHFIX = CURRENTVALUEPHFIX+2
+    #print(f"playerhexfix>{playerhexfix}")
 
 
 
 
+    print(playerhex.upper())
+    print(playerhexfix.upper())
 
-#set up solarhosting.cc and fix rate limiting and update pip. ask in the server?
+
+    file = open(filecsv)
+    type(file)
+    csvreader = csv.reader(file)
+    #print(header)
+    for row in csv.reader(open(filecsv)):
+        rowstr = str(row)
+        if not rowstr.find("kdr::uuidname") == -1:
+                for row in csvreader:
+                    rowstr = str(row)
+                    if not rowstr.find("kdr::uuidname") == -1:
+                        if not rowstr.find(playerhex.upper()) == -1:
+                            if not rowstr.find("]", 0, len(playerhex)+73) == -1:
+                                playeruuid = ""
+                                for i in range(15,51):
+                                    playeruuid = playeruuid+rowstr[i]
+                                    #print(rowstr[i])
+                                #print("---------------------------------")
+                                #print(row)
+                                #print(playeruuid)
+
+
+    #print(rows)
+    killshex=""
+    for row in csv.reader(open(filecsv)):
+        rowstr = str(row)
+        if not rowstr.find(f"kills::{playeruuid}") == -1:
+            print(row)
+            for i in range(59,75):
+                killshex=killshex+rowstr[i]
+    #print(playeruuid)
+    kills=hexadecimal_to_decimal(killshex)
+    print(kills)
+
+    deathshex=""
+    for row in csv.reader(open(filecsv)):
+        rowstr = str(row)
+        if not rowstr.find(f"deaths::{playeruuid}") == -1:
+            print(row)
+            for i in range(60,76):
+                deathshex=deathshex+rowstr[i]
+    #print(playeruuid)
+    deaths=hexadecimal_to_decimal(deathshex)
+    print(deaths)
+
+    await input_interaction.edit_original_response(content=f"Loading... (Finalizing)")
+
+    timestamp = ""
+    gettimestampcurrentrow = 0
+    for row in csv.reader(open(filecsv)):
+        if gettimestampcurrentrow == 0:
+            gettimestampcurrentrow = 1
+            timestamp = row[0]
+            print(row)
+
+
+    topkdrname = ''
+
+    for row in csv.reader(open(filecsv)):
+        rowstr = str(row)
+        if not rowstr.find("topkdrname") == -1:
+            for i in range(32,len(rowstr)-2):
+                #print(rowstr[i])
+                topkdrname = topkdrname+rowstr[i]
+    topkdrnameencode = topkdrname.encode('utf-8')
+    topkdrnamefinal = hex_to_ascii(decode_encoded_string(topkdrnameencode, 'utf-8'))
+
+
+    if topkdrnamefinal == player:
+        KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('e0bd00', 16))
+        KDR_EMBED.add_field(value=f'''{player}'s KDR is {round(kills/deaths,2)}!
+They also have the **top kdr**!''', name="KDR", inline=False)
+    else:
+        KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('fa2d1e', 16))
+        KDR_EMBED.add_field(value=f"{player}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
+    KDR_EMBED.add_field(value=f"{player}'s has {kills} kills!", name="Kills", inline=False)
+    # KDR_EMBED.add_field(value=f'''{player}'s has {deaths} deaths!\n\nIf these numbers are wierdly big, wait a bit and try again. If it's not fixed, contact <@733487800124571679>''', name="Deaths", inline=False)
+    KDR_EMBED.add_field(value=f'''{player}'s has {deaths} deaths!''', name="Deaths", inline=False)
+    KDR_EMBED.set_thumbnail(url=f'https://mc-heads.net/combo/{player}')
+    KDR_EMBED.set_footer(text=f'''{timestamp}
+Even if the stats file was recently downloaded, new stats are only added after a restart.''')
+    kdrresponsetimeend = time.time()
+    return KDR_EMBED
+
+
+
+
 
 #pestbill water freezes
 #leave messages dont show up for me (maybe donkey) in discordsrv
 
-#/setevent allows url for image
 #topkdr npc sending kdr value
 
 #example. /kdr a. someone with name starting with a might get selected instead of nobody. (presumably fixed)
 
 #leaderboard
-#/topkdr
-#say if player is topkdr
-
 
 #more stuff in bot-console
 #non case sensitive var
 #/help
-#/ping
 
 bot.run(BOT_TOKEN)
