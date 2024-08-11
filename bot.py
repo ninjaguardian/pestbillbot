@@ -15,7 +15,7 @@ GITHUB_TOKEN_LOC = './GITTOKEN.txt'
 SFTP_CSV_LOC = '/server/plugins/Skript/variables.csv'
 
 
-TOKEN_TEST = 'ZwcdoCaElfxgAWkVHwXmQjUEbN.UppePv.pOMpjSUFyVPxN-kTdwyOyZvOTHSuVMSEOGsrtp' #NOTREAL!!!!
+TOKEN = 'ZwcdoCaElfxgAWkVHwXmQjUEbN.UppePv.pOMpjSUFyVPxN-kTdwyOyZvOTHSuVMSEOGsrtg'
 
 
 #--------------------------------------------------------------------------------------------------
