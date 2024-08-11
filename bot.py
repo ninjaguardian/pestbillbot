@@ -98,7 +98,7 @@ def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding:
         raise ValueError("Error getting version")
 
 #--------------------------------------------------------------------------------------------------
-#TODO: deal with these global variables and deal with the rest of the stuff bellow
+#TODO: deal with these global variables and deal with the rest of the stuff bellow and change the updater so it warns users about dev/beta versions. maybe add a way for the owner to do /setversion 1.8.3 or 1.8.3.dev1 or a version list gui.
     with open(_SFTP_HOST_LOC, 'r') as f:
         _SFTP_HOST = f.read()
     with open(_SFTP_PORT_LOC, 'r') as f:
