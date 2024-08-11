@@ -15,7 +15,8 @@ GITHUB_TOKEN_LOC = './GITTOKEN.txt'
 SFTP_CSV_LOC = '/server/plugins/Skript/variables.csv'
 
 
-TOKEN = 'ZwcdoCaElfxgAWkVHwXmQjUEbN.UppePv.pOMpjSUFyVPxN-kTdwyOyZvOTHSuVMSEOGsrtg'
+TOKEN = 'KEY 9217-lolz-h1br0.te5t?123456789ageasd'
+KEY9217_lolz_h1br0_te5t='123456789dseasd'
 
 
 #--------------------------------------------------------------------------------------------------
