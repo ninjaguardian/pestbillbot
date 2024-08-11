@@ -1,77 +1,15 @@
-#VERSION - 1.2.5
+#VERSION - 1.2.6.dev.1
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on github
 
-
-EVENT_IMAGE_LOC = './eventimage.png'
-VARS_CSV_LOC = './variables.csv'
-EVENT_COLOR_LOC = './eventembedcolor.txt'
-EVENT_LOC = './event.txt'
-DISCORD_BOT_TOKEN_LOC = './BOTTOKEN.txt'
-SFTP_PASS_LOC = './sftpPASS.txt'
-SFTP_USER_LOC = './sftpUSER.txt'
-GITHUB_TOKEN_LOC = './GITTOKEN.txt'
-SFTP_CSV_LOC = '/server/plugins/Skript/variables.csv'
-
-
-KEY9217_lolz_h1br0_te5t='123456789dseasd'
-TOKEN = 'KEY9217_lolz_h1br0_te5t=123456789dseasd'
-test = 'fio-u-================================================================'
-tesst = 'fio-u-================================================================'
-
-#--------------------------------------------------------------------------------------------------
-offset = 11
-
-with open(__file__, 'r') as f:
-    curline = f.readline()
-    ver = ''
-    for cur in range(len(curline)-offset-1):
-        ver = ver+curline[cur+offset]
-print("Current:",ver)
-
-
-
 from github import Github
+from github.ContentFile import ContentFile
 from packaging.version import Version, parse
 import sys
+import os
 import subprocess
-with open(GITHUB_TOKEN_LOC, 'r') as f:
-    g = Github(f.read())
-repo = g.get_repo('ninjaguardian/pestbillbot')
-
-contents = repo.get_contents('bot.py')
-
-decoded = contents.decoded_content
-decoded_str = decoded.decode("UTF-8")
-decoded_firstline = decoded_str.splitlines()[0]
-gitver = ''
-for gitcur in range(len(decoded_firstline)-offset):
-    gitver = gitver+decoded_firstline[gitcur+offset]
-print("Github:",gitver)
-
-def restartpythonscript():
-    print("argv was",sys.argv)
-    print(f"sys.executable was {sys.executable}")
-    print("restart now")
-    subprocess.call(["python", os.path.join(sys.path[0], __file__)] + sys.argv[1:])
-
-gitverparsed = parse(gitver)
-verparsed = parse(ver)
-if gitverparsed>verparsed:
-    print("Downloading....")
-    with open(__file__, 'wb') as f:
-        f.write(decoded)
-    print("Downloaded new bot.py")
-    restartpythonscript()
-    exit("New version ran")
-elif verparsed>=gitverparsed:
-    print("Keep bot.py")
-else:
-    print("Error getting version")
-
-#--------------------------------------------------------------------------------------------------
-
+from typing import Callable, Tuple
 
 import time
 from discord.ext import commands
@@ -86,60 +24,121 @@ import aiohttp
 import aiofiles
 import functools
 import typing
-host = 'ftp.minehut.com'
-port = 2223
-with open(SFTP_USER_LOC, 'r') as f:
-    username = f.read()
-with open(SFTP_PASS_LOC, 'r') as f:
-    password = f.read()
-cnopts = pysftp.CnOpts()
-cnopts.hostkeys = None
 
-with open(DISCORD_BOT_TOKEN_LOC, 'r') as f:
-    BOT_TOKEN = f.read()
-CHANNEL_ID = 1139304414885183658
-MOD_ONLY_CHANNEL_ID = 1182685204775714887
-BYPASS_ROLE = 1139294768090853536
-PESTBILL_ID = 1139292425353973790
+_EVENT_IMAGE_LOC = './eventimage.png'
+_VARS_CSV_LOC = './variables.csv'
+_EVENT_COLOR_LOC = './eventembedcolor.txt'
+_EVENT_LOC = './event.txt'
+_DISCORD_BOT_TOKEN_LOC = './BOTTOKEN.txt'
+_SFTP_PASS_LOC = './sftpPASS.txt'
+_SFTP_USER_LOC = './sftpUSER.txt'
+_SFTP_HOST_LOC = './sftpHOST.txt'
+_SFTP_PORT_LOC = './sftpPORT.txt'
+_GITHUB_TOKEN_LOC = './GITTOKEN.txt'
+_SFTP_CSV_LOC = '/server/plugins/Skript/variables.csv'
+_VER_OFFSET = 11
+type _VERSION_PARSER = Callable[[str,int],Version]
+type _ENCODING = str | None
+
+#--------------------------------------------------------------------------------------------------
+def get_file_version(version_line: str, OFFSET: int) -> Version:
+    VERSION = ''
+    for current_char in range(len(version_line)-OFFSET-1):
+        VERSION += version_line[current_char+OFFSET]
+    return parse(VERSION)
+
+def get_current_file_version(OFFSET: int, encoding: _ENCODING = None, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Version:
+    with open(__file__, 'r', encoding=encoding) as f:
+        current_line = f.readline()
+    current_version = version_parser(current_line, OFFSET)
+    if debug:
+        print("Current:", current_version)
+    return current_version
+
+def get_latest_file_contents(GIT_TOKEN_LOC: str, REPO_LOC: str, encoding: _ENCODING = None) -> bytes:
+    with open(GIT_TOKEN_LOC, 'r', encoding=encoding) as f:
+        g = Github(f.read())
+    repo = g.get_repo(REPO_LOC)
+    contents = repo.get_contents('bot.py')
+    assert isinstance(contents, ContentFile)
+    return contents.decoded_content
+
+def get_latest_file_version(bytes_file: bytes, OFFSET: int, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Version:
+    decoded_str = bytes_file.decode("UTF-8")
+    decoded_firstline = decoded_str.splitlines()[0]
+    latest_version = version_parser(decoded_firstline, OFFSET)
+    if debug:
+        print("Github:", latest_version)
+    return latest_version
+
+def restartpythonscript(debug: bool = False):
+    if debug:
+        print("argv was",sys.argv)
+        print(f"sys.executable was {sys.executable}")
+        print("restart now")
+    subprocess.call(["python", os.path.join(sys.path[0], __file__)] + sys.argv[1:])
+
+def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> None:
+    current_version = current_version_retriever(OFFSET, encoding, version_parser, debug) #Local
+    latest_content = latest_content_retriever(GIT_TOKEN_LOC, REPO_LOC, encoding)
+    latest_version = latest_version_retriever(latest_content, OFFSET, version_parser, debug) #Github
+    if latest_version>current_version:
+        if debug:
+            print(f"Downloading.... (Found: {latest_version})")
+        with open(__file__, 'wb') as f:
+            f.write(latest_content)
+        if debug:
+            print(f"Downloaded and restarting. {latest_version}>{current_version}")
+        restartpythonscript()
+        exit(f"New version ran ({latest_version})")
+    elif current_version>=latest_version:
+        if debug:
+            print(f"No new version found ||Github: {latest_version}   Current: {current_version}||")
+    else:
+        raise ValueError("Error getting version")
+
+#--------------------------------------------------------------------------------------------------
+#TODO: deal with these global variables and deal with the rest of the stuff bellow
+    with open(_SFTP_HOST_LOC, 'r') as f:
+        _SFTP_HOST = f.read()
+    with open(_SFTP_PORT_LOC, 'r') as f:
+        _SFTP_PORT = int(f.read())
+    with open(_SFTP_USER_LOC, 'r') as f:
+        _SFTP_USERNAME = f.read()
+    with open(_SFTP_PASS_LOC, 'r') as f:
+        _SFTP_PASSWORD = f.read()
+
+    _CnOpts = pysftp.CnOpts()
+    _CnOpts.hostkeys = None
+
+    with open(_DISCORD_BOT_TOKEN_LOC, 'r') as f:
+        BOT_TOKEN = f.read()
+
+    bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+
+    _PERMISSION_NOT_FOUND_EMBED = discord.Embed()
+    _PERMISSION_NOT_FOUND_EMBED.add_field(name="**HEY!**",value=str("""```ansi
+    [2;31m[2;31mYou do not have permission to do that![0m[2;31m[0m
+    ```"""))
 
 
 
+def decimal_to_hexadecimal(decimal_num: int) -> str:
+    return hex(decimal_num)
 
+def hexadecimal_to_decimal(hexadecimal_str: str) -> int:
+    return int(hexadecimal_str, 16)
 
-PERMISSION_NOT_FOUND_EMBED = discord.Embed()
-PERMISSION_NOT_FOUND_EMBED.add_field(name="**HEY!**",value=str("""```ansi
-[2;31m[2;31mYou do not have permission to do that![0m[2;31m[0m
-```"""))
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+def hex_to_ascii(hex_string: str) -> str:
+    return bytes.fromhex(hex_string).decode('ascii')
 
-
-def decimal_to_hexadecimal(decimal_num: int):
-    hexadecimal_num = hex(decimal_num)
-    return hexadecimal_num
-
-def hexadecimal_to_decimal(hexadecimal_str):
-    decimal_num = int(hexadecimal_str, 16)
-    return decimal_num
-
-def hex_to_ascii(hex_string):
-    # Convert the hexadecimal string to bytes
-    byte_data = bytes.fromhex(hex_string)
-
-    try:
-        # Decode the bytes to ASCII
-        ascii_text = byte_data.decode('ascii')
-        return ascii_text
-    except UnicodeDecodeError:
-        # Handle exceptions in case of non-ASCII characters
-        return "Unable to decode some characters as ASCII"
-
-def decode_encoded_string(encoded_string, encoding):
-    decoded_string = codecs.decode(encoded_string, encoding)
-    return decoded_string
+def decode_encoded_string(encoded_string: bytes, encoding: str) -> str:
+    return codecs.decode(encoded_string, encoding)
 
 def is_server_owner(interaction: discord.Interaction):
-    if interaction.user.id == interaction.guild.owner_id:
-        return True
+    if interaction.guild != None:
+        if interaction.user.id == interaction.guild.owner_id:
+            return True
     return False
 
 def minutefix():
@@ -148,62 +147,40 @@ def minutefix():
     else:
         return datetime.now().minute
 
-
-def updateandrestartbot():
-    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-    print("Checking for updates... (getting current version)")
-
-    offset = 11
-
-    with open(__file__, 'r') as f:
-        curline = f.readline()
-        ver = ''
-        for cur in range(len(curline)-offset-1):
-            ver = ver+curline[cur+offset]
-    print("Current:",ver)
-    print(f"Found {ver}\nChecking for updates... (connecting to github)")
-
-    with open(GITHUB_TOKEN_LOC, 'r') as f:
-        g = Github(f.read())
-    repo = g.get_repo('ninjaguardian/pestbillbot')
-
-    contents = repo.get_contents('bot.py')
-
-    decoded = contents.decoded_content
-    decoded_str = decoded.decode("UTF-8")
-    print("Checking for updates... (getting github version)")
-    decoded_firstline = decoded_str.splitlines()[0]
-    gitver = ''
-    for gitcur in range(len(decoded_firstline)-offset):
-        gitver = gitver+decoded_firstline[gitcur+offset]
-    print("Github:",gitver)
-    print(f"Found {gitver}")
-    gitverparsed = parse(gitver)
-    verparsed = parse(ver)
-    if gitverparsed>verparsed:
-        print(f"Found new version: {gitver}")
-        print("Downloading....")
-        with open(__file__, 'wb') as f:
-            f.write(decoded)
-            print(f"Downloaded and restarting. {ver}>{gitver}")
-        print("Downloaded new bot.py")
-        restartpythonscript()
-        exit("New version ran")
-        return True
-    elif verparsed>=gitverparsed:
-        print("Keep bot.py")
-        print(f"No new version found ||Github: {gitver}   Current: {ver}||")
-        return False
-    else:
-        print("Error getting version")
-        print("Error getting version")
-        return False
-
-async def run_blocking(blocking_func: typing.Callable) -> typing.Any:
+async def run_blocking(blocking_func: typing.Callable, bot: commands.Bot) -> typing.Any:
     """Runs a blocking function in a non-blocking way"""
     func = functools.partial(blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)
 
+
+def getnewcsv():
+    try:
+        conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
+        CONNWORKED = True
+        print("connection established successfully")
+    except:
+        CONNWORKED = False
+        print('failed to establish connection to targeted server')
+    if CONNWORKED is True:
+        current_dir = conn.pwd
+        print('our current working directory is: ',current_dir)
+        print('available list of directories: ',conn.listdir())
+        if os.path.exists(VARS_CSV_LOC):
+            print("file removed")
+            os.remove(VARS_CSV_LOC)
+        conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
+        print("new file got")
+        read = []
+        with open(VARS_CSV_LOC, 'r') as f:
+            reader = csv.reader(f)
+            for line in reader:
+                read.append(line)
+            print("read new file")
+        with open(VARS_CSV_LOC, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
+            writer.writerows(read)
+            print('written')
 
 #Boot message
 @bot.event
@@ -301,10 +278,10 @@ async def setevent_error(interaction: discord.Interaction, error):
 @bot.tree.command(description="Turns bot off")
 @app_commands.check(is_server_owner)
 async def shutdown(ctx):
-   await ctx.response.send_message("Bot is being shut down...", ephemeral=True)
-   channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-   await channel.send("Shutting down bot!")
-   await bot.close()
+await ctx.response.send_message("Bot is being shut down...", ephemeral=True)
+channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+await channel.send("Shutting down bot!")
+await bot.close()
 
 @shutdown.error
 async def shutdown_error(interaction: discord.Interaction, error):
@@ -334,10 +311,10 @@ async def shutdown_error(interaction: discord.Interaction, error):
 @bot.tree.command(description="Restarts bot (also updates)")
 @app_commands.check(is_server_owner)
 async def restartbot(ctx):
-   await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
-   channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-   await channel.send("Updating/restarting bot!")
-   await run_blocking(restartpythonscript)
+await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
+channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+await channel.send("Updating/restarting bot!")
+await run_blocking(restartpythonscript)
 
 
 @restartbot.error
@@ -346,36 +323,6 @@ async def restartbot_error(interaction: discord.Interaction, error):
         await interaction.edit_original_response(content=f"idk what went wrong... {error}")
     else:
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
-
-
-def getnewcsv():
-    try:
-        conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
-        CONNWORKED = True
-        print("connection established successfully")
-    except:
-        CONNWORKED = False
-        print('failed to establish connection to targeted server')
-    if CONNWORKED is True:
-        current_dir = conn.pwd
-        print('our current working directory is: ',current_dir)
-        print('available list of directories: ',conn.listdir())
-        if os.path.exists(VARS_CSV_LOC):
-            print("file removed")
-            os.remove(VARS_CSV_LOC)
-        conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
-        print("new file got")
-        read = []
-        with open(VARS_CSV_LOC, 'r') as f:
-            reader = csv.reader(f)
-            for line in reader:
-                read.append(line)
-            print("read new file")
-        with open(VARS_CSV_LOC, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
-            writer.writerows(read)
-            print('written')
 
 @bot.tree.command(description="Gets the player with the topkdr")
 async def topkdr(interaction: discord.Interaction):
@@ -692,4 +639,11 @@ Even if the stats file was recently downloaded, new stats are only added after a
 #non case sensitive var
 #/help
 
-bot.run(BOT_TOKEN)
+if __name__ == "__main__":
+    bot.run(BOT_TOKEN)
+
+
+    CHANNEL_ID = 1139304414885183658
+    MOD_ONLY_CHANNEL_ID = 1182685204775714887
+    BYPASS_ROLE = 1139294768090853536
+    PESTBILL_ID = 1139292425353973790
