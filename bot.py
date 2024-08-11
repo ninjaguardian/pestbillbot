@@ -69,7 +69,7 @@ elif verparsed>=gitverparsed:
     print("Keep bot.py")
 else:
     print("Error getting version")
-  
+
 #--------------------------------------------------------------------------------------------------
 
 
@@ -147,7 +147,7 @@ def minutefix():
         return "0"+str(datetime.now().minute)
     else:
         return datetime.now().minute
-    
+
 
 def updateandrestartbot():
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
@@ -244,7 +244,7 @@ async def ping(ctx):
 
 @bot.tree.command(description="Gets the current pestbill event")
 async def event(ctx):
-    file = discord.File(EVENT_IMAGE_LOC, filename='eventimage.png')  
+    file = discord.File(EVENT_IMAGE_LOC, filename='eventimage.png')
     with open(EVENT_COLOR_LOC, 'r') as f:
         EVENT_EMBED=discord.Embed(title="Event", color=int(f.read()))
     with open(EVENT_LOC, 'r') as f:
@@ -260,7 +260,7 @@ async def event(ctx):
 async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None):
     if imageurl is None:
         file = discord.File(EVENT_IMAGE_LOC, filename='eventimage.png')
-    else:        
+    else:
         async with aiohttp.ClientSession() as session:
             async with session.get(imageurl) as resp:
                 if resp.status != 200:
@@ -322,7 +322,7 @@ async def shutdown_error(interaction: discord.Interaction, error):
 #    await channel.send("Updating and restarting bot!")
 #    await run_blocking(updateandrestartbot)
 #    await ctx.edit_original_response(content="Updated? Maybe?")
-   
+
 
 # @updatebot.error
 # async def updatebot_error(interaction: discord.Interaction, error):
@@ -330,7 +330,7 @@ async def shutdown_error(interaction: discord.Interaction, error):
 #         await interaction.edit_original_response(content=f"idk what went wrong... {error}")
 #     else:
 #         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
-        
+
 @bot.tree.command(description="Restarts bot (also updates)")
 @app_commands.check(is_server_owner)
 async def restartbot(ctx):
@@ -338,7 +338,7 @@ async def restartbot(ctx):
    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
    await channel.send("Updating/restarting bot!")
    await run_blocking(restartpythonscript)
-   
+
 
 @restartbot.error
 async def restartbot_error(interaction: discord.Interaction, error):
@@ -346,14 +346,14 @@ async def restartbot_error(interaction: discord.Interaction, error):
         await interaction.edit_original_response(content=f"idk what went wrong... {error}")
     else:
         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
-        
+
 
 def getnewcsv():
     try:
         conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
         CONNWORKED = True
         print("connection established successfully")
-    except: 
+    except:
         CONNWORKED = False
         print('failed to establish connection to targeted server')
     if CONNWORKED is True:
@@ -407,7 +407,7 @@ async def kdr(interaction: discord.Interaction, player: str):
     #     conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
     #     CONNWORKED = True
     #     print("connection established successfully")
-    # except: 
+    # except:
     #     CONNWORKED = False
     #     print('failed to establish connection to targeted server')
     # if CONNWORKED is True:
@@ -542,8 +542,8 @@ Even if the stats file was recently downloaded, new stats are only added after a
     kdrresponsetimeend = time.time()
     kdrresponsetime = kdrresponsetimeend-kdrresponsetimestart
     await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED)
-        
-        
+
+
 
 #____________________________________________
 
@@ -557,8 +557,8 @@ async def kdr_error(interaction: discord.Interaction, error):
 > The player may have had their stats wiped due to them being low.
 > The player may have not joined the game before.
 > DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
-        await bot.get_channel(MOD_ONLY_CHANNEL_ID).send(f'''Someone had a kdr error! 
-                                                        
+        await bot.get_channel(MOD_ONLY_CHANNEL_ID).send(f'''Someone had a kdr error!
+
 ctx: {interaction}
 
 error: {error}''')
