@@ -1,0 +1,9 @@
+.mypy_cache/
+BOTTOKEN.txt
+event.txt
+eventembedcolor.txt
+eventimage.png
+GITTOKEN.txt
+sftpPASS.txt
+sftpUSER.txt
+variables.csv

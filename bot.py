@@ -1,67 +1,24 @@
-#VERSION - 1.2.4
+#VERSION - 1.2.5
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on github
 
 
-import os
-if os.path.isfile('C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'):
-    botpyloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/bot.py'
-    system = "pc"
-elif os.path.isfile('/home/plum-pi/Desktop/bot.py'):
-    botpyloc = '/home/plum-pi/Desktop/bot.py'
-    system = "pi"
-elif os.path.isfile('/home/container/bot.py'):
-    botpyloc = '/home/container/bot.py'
-    system = "solar"
-else:
-    print("Could not detect system.")
-    exit()
-
-
-print("System:",system)
-if system == "pc":
-    EVENTIMAGELOC = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/eventimage.png'
-    filecsv = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/variables.csv'
-    eventembedcolorloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/eventembedcolor.txt'
-    eventloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/event.txt'
-    PESTBILL_VARcsv = '/server/plugins/Skript/variables.csv'
-    tokenloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/BOTTOKEN.txt'
-    sftpPASSloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/sftpPASS.txt'
-    sftpUSERloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/sftpUSER.txt'
-    githubtokenloc = 'C:/Users/carte/OneDrive/Desktop/Python code/discord/GITTOKEN.txt'
-elif system == "solar":
-    EVENTIMAGELOC = '/home/container/eventimage.png'
-    filecsv = '/home/container/variables.csv'
-    eventembedcolorloc = '/home/container/eventembedcolor.txt'
-    eventloc = '/home/container/event.txt'
-    PESTBILL_VARcsv = '/server/plugins/Skript/variables.csv'
-    tokenloc = '/home/container/BOTTOKEN.txt'
-    sftpPASSloc = '/home/container/sftpPASS.txt'
-    sftpUSERloc = '/home/container/sftpUSER.txt'
-    githubtokenloc = '/home/container/GITTOKEN.txt'
-elif system == "pi":
-    EVENTIMAGELOC = '/home/plum-pi/Desktop/eventimage.png'
-    filecsv = '/home/plum-pi/Desktop/variables.csv'
-    eventembedcolorloc = '/home/plum-pi/Desktop/eventembedcolor.txt'
-    eventloc = '/home/plum-pi/Desktop/event.txt'
-    PESTBILL_VARcsv = '/server/plugins/Skript/variables.csv'
-    tokenloc = '/home/plum-pi/Desktop/BOTTOKEN.txt'
-    sftpPASSloc = '/home/plum-pi/Desktop/sftpPASS.txt'
-    sftpUSERloc = '/home/plum-pi/Desktop/sftpUSER.txt'
-    githubtokenloc = '/home/plum-pi/Desktop/GITTOKEN.txt'
-else:
-    print("system is not valid!")
-    exit()
-
-
-
+EVENT_IMAGE_LOC = './eventimage.png'
+VARS_CSV_LOC = './variables.csv'
+EVENT_COLOR_LOC = './eventembedcolor.txt'
+EVENT_LOC = './event.txt'
+DISCORD_BOT_TOKEN_LOC = './BOTTOKEN.txt'
+SFTP_PASS_LOC = './sftpPASS.txt'
+SFTP_USER_LOC = './sftpUSER.txt'
+GITHUB_TOKEN_LOC = './GITTOKEN.txt'
+SFTP_CSV_LOC = '/server/plugins/Skript/variables.csv'
 
 
 #--------------------------------------------------------------------------------------------------
 offset = 11
 
-with open(botpyloc, 'r') as f:
+with open(__file__, 'r') as f:
     curline = f.readline()
     ver = ''
     for cur in range(len(curline)-offset-1):
@@ -74,7 +31,7 @@ from github import Github
 from packaging.version import Version, parse
 import sys
 import subprocess
-with open(githubtokenloc, 'r') as f:
+with open(GITHUB_TOKEN_LOC, 'r') as f:
     g = Github(f.read())
 repo = g.get_repo('ninjaguardian/pestbillbot')
 
@@ -98,7 +55,7 @@ gitverparsed = parse(gitver)
 verparsed = parse(ver)
 if gitverparsed>verparsed:
     print("Downloading....")
-    with open(botpyloc, 'wb') as f:
+    with open(__file__, 'wb') as f:
         f.write(decoded)
     print("Downloaded new bot.py")
     restartpythonscript()
@@ -126,14 +83,14 @@ import functools
 import typing
 host = 'ftp.minehut.com'
 port = 2223
-with open(sftpUSERloc, 'r') as f:
+with open(SFTP_USER_LOC, 'r') as f:
     username = f.read()
-with open(sftpPASSloc, 'r') as f:
+with open(SFTP_PASS_LOC, 'r') as f:
     password = f.read()
 cnopts = pysftp.CnOpts()
 cnopts.hostkeys = None
 
-with open(tokenloc, 'r') as f:
+with open(DISCORD_BOT_TOKEN_LOC, 'r') as f:
     BOT_TOKEN = f.read()
 CHANNEL_ID = 1139304414885183658
 MOD_ONLY_CHANNEL_ID = 1182685204775714887
@@ -193,7 +150,7 @@ def updateandrestartbot():
 
     offset = 11
 
-    with open(botpyloc, 'r') as f:
+    with open(__file__, 'r') as f:
         curline = f.readline()
         ver = ''
         for cur in range(len(curline)-offset-1):
@@ -201,7 +158,7 @@ def updateandrestartbot():
     print("Current:",ver)
     print(f"Found {ver}\nChecking for updates... (connecting to github)")
 
-    with open(githubtokenloc, 'r') as f:
+    with open(GITHUB_TOKEN_LOC, 'r') as f:
         g = Github(f.read())
     repo = g.get_repo('ninjaguardian/pestbillbot')
 
@@ -221,7 +178,7 @@ def updateandrestartbot():
     if gitverparsed>verparsed:
         print(f"Found new version: {gitver}")
         print("Downloading....")
-        with open(botpyloc, 'wb') as f:
+        with open(__file__, 'wb') as f:
             f.write(decoded)
             print(f"Downloaded and restarting. {ver}>{gitver}")
         print("Downloaded new bot.py")
@@ -282,10 +239,10 @@ async def ping(ctx):
 
 @bot.tree.command(description="Gets the current pestbill event")
 async def event(ctx):
-    file = discord.File(EVENTIMAGELOC, filename='eventimage.png')  
-    with open(eventembedcolorloc, 'r') as f:
+    file = discord.File(EVENT_IMAGE_LOC, filename='eventimage.png')  
+    with open(EVENT_COLOR_LOC, 'r') as f:
         EVENT_EMBED=discord.Embed(title="Event", color=int(f.read()))
-    with open(eventloc, 'r') as f:
+    with open(EVENT_LOC, 'r') as f:
         EVENT_EMBED.add_field(name="",value=f"The current event is **{f.read()}**!", inline=False)
     EVENT_EMBED.set_thumbnail(url="attachment://eventimage.png")
 
@@ -297,7 +254,7 @@ async def event(ctx):
 @app_commands.check(is_server_owner)
 async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None):
     if imageurl is None:
-        file = discord.File(EVENTIMAGELOC, filename='eventimage.png')
+        file = discord.File(EVENT_IMAGE_LOC, filename='eventimage.png')
     else:        
         async with aiohttp.ClientSession() as session:
             async with session.get(imageurl) as resp:
@@ -305,14 +262,14 @@ async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None)
                     await ctx.response.send_message("Could not download file!", ephemeral=True)
                 eventimgfiledata = io.BytesIO(await resp.read())
                 file = discord.File(eventimgfiledata, 'eventimage.png')
-                tempf = await aiofiles.open(EVENTIMAGELOC, mode='wb')
+                tempf = await aiofiles.open(EVENT_IMAGE_LOC, mode='wb')
                 await tempf.write(await resp.read())
                 await tempf.close()
     if event is None:
-        with open(eventloc, 'r') as f:
+        with open(EVENT_LOC, 'r') as f:
             event = f.read()
     if hexcolor is None:
-        with open(eventembedcolorloc, 'r') as f:
+        with open(EVENT_COLOR_LOC, 'r') as f:
             hexcolor = ""
             hexcolornohashtagconverted = decimal_to_hexadecimal(int(f.read()))
             for curchar in range(len(hexcolornohashtagconverted)-2):
@@ -323,9 +280,9 @@ async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None)
     SET_EVENT_EMBED.add_field(value=f"Set the current event to: **{event}** and the color to **#{hexcolor}** ||decimal: **{int(hexcolor, 16)}**||", name="Image may not work as expected.", inline=False)
     SET_EVENT_EMBED.set_thumbnail(url="attachment://eventimage.png")
     await ctx.response.send_message(file=file, embed=SET_EVENT_EMBED, ephemeral=True)
-    with open(eventloc, 'w') as f:
+    with open(EVENT_LOC, 'w') as f:
         f.write(f'{event}')
-    with open(eventembedcolorloc, 'w') as f:
+    with open(EVENT_COLOR_LOC, 'w') as f:
         f.write(f'{int(hexcolor, 16) }')
 
 
@@ -398,18 +355,18 @@ def getnewcsv():
         current_dir = conn.pwd
         print('our current working directory is: ',current_dir)
         print('available list of directories: ',conn.listdir())
-        if os.path.exists(filecsv):
+        if os.path.exists(VARS_CSV_LOC):
             print("file removed")
-            os.remove(filecsv)
-        conn.get(PESTBILL_VARcsv, localpath=filecsv)
+            os.remove(VARS_CSV_LOC)
+        conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
         print("new file got")
         read = []
-        with open(filecsv, 'r') as f:
+        with open(VARS_CSV_LOC, 'r') as f:
             reader = csv.reader(f)
             for line in reader:
                 read.append(line)
             print("read new file")
-        with open(filecsv, 'w', newline='') as f:
+        with open(VARS_CSV_LOC, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
             writer.writerows(read)
@@ -423,7 +380,7 @@ async def topkdr(interaction: discord.Interaction):
     await interaction.edit_original_response(content=f"Loading... (finding topkdr)")
     topkdrname = ''
 
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find("topkdrname") == -1:
             for i in range(32,len(rowstr)-2):
@@ -452,18 +409,18 @@ async def kdr(interaction: discord.Interaction, player: str):
     #     current_dir = conn.pwd
     #     print('our current working directory is: ',current_dir)
     #     print('available list of directories: ',conn.listdir())
-    #     if os.path.exists(filecsv):
+    #     if os.path.exists(VARS_CSV_LOC):
     #         print("file removed")
-    #         os.remove(filecsv)
-    #     conn.get(PESTBILL_VARcsv, localpath=filecsv)
+    #         os.remove(VARS_CSV_LOC)
+    #     conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
     #     print("new file got")
     #     read = []
-    #     with open(filecsv, 'r') as f:
+    #     with open(VARS_CSV_LOC, 'r') as f:
     #         reader = csv.reader(f)
     #         for line in reader:
     #             read.append(line)
     #         print("read new file")
-    #     with open(filecsv, 'w', newline='') as f:
+    #     with open(VARS_CSV_LOC, 'w', newline='') as f:
     #         writer = csv.writer(f)
     #         writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
     #         writer.writerows(read)
@@ -496,11 +453,11 @@ async def kdr(interaction: discord.Interaction, player: str):
     print(playerhexfix.upper())
 
 
-    file = open(filecsv)
+    file = open(VARS_CSV_LOC)
     type(file)
     csvreader = csv.reader(file)
     #print(header)
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find("kdr::uuidname") == -1:
                 for row in csvreader:
@@ -519,7 +476,7 @@ async def kdr(interaction: discord.Interaction, player: str):
 
     #print(rows)
     killshex=""
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find(f"kills::{playeruuid}") == -1:
             print(row)
@@ -530,7 +487,7 @@ async def kdr(interaction: discord.Interaction, player: str):
     print(kills)
 
     deathshex=""
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find(f"deaths::{playeruuid}") == -1:
             print(row)
@@ -545,7 +502,7 @@ async def kdr(interaction: discord.Interaction, player: str):
 
     timestamp = ""
     gettimestampcurrentrow = 0
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         if gettimestampcurrentrow == 0:
             gettimestampcurrentrow = 1
             timestamp = row[0]
@@ -554,7 +511,7 @@ async def kdr(interaction: discord.Interaction, player: str):
 
     topkdrname = ''
 
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find("topkdrname") == -1:
             for i in range(32,len(rowstr)-2):
@@ -630,11 +587,11 @@ async def getkdr_nonbot(player: str,input_interaction: discord.Interaction):
     print(playerhexfix.upper())
 
 
-    file = open(filecsv)
+    file = open(VARS_CSV_LOC)
     type(file)
     csvreader = csv.reader(file)
     #print(header)
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find("kdr::uuidname") == -1:
                 for row in csvreader:
@@ -653,7 +610,7 @@ async def getkdr_nonbot(player: str,input_interaction: discord.Interaction):
 
     #print(rows)
     killshex=""
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find(f"kills::{playeruuid}") == -1:
             print(row)
@@ -664,7 +621,7 @@ async def getkdr_nonbot(player: str,input_interaction: discord.Interaction):
     print(kills)
 
     deathshex=""
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find(f"deaths::{playeruuid}") == -1:
             print(row)
@@ -678,7 +635,7 @@ async def getkdr_nonbot(player: str,input_interaction: discord.Interaction):
 
     timestamp = ""
     gettimestampcurrentrow = 0
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         if gettimestampcurrentrow == 0:
             gettimestampcurrentrow = 1
             timestamp = row[0]
@@ -687,7 +644,7 @@ async def getkdr_nonbot(player: str,input_interaction: discord.Interaction):
 
     topkdrname = ''
 
-    for row in csv.reader(open(filecsv)):
+    for row in csv.reader(open(VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find("topkdrname") == -1:
             for i in range(32,len(rowstr)-2):
