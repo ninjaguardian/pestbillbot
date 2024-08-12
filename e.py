@@ -52,3 +52,33 @@ for row in csvreader:
 
 
 # print(playeruuid)
+
+
+
+
+def generate_hex_pattern(s):
+    hex_pattern_parts = []
+
+    for char in s:
+        if char.isdigit():
+            # Convert digit to hex and format as (##)
+            hex_value = format(int(char), 'x').upper()
+            hex_pattern_parts.append(f'3{hex_value}')
+        elif char.isalpha():
+            # Convert letter to hex for both uppercase and lowercase
+            hex_upper = format(ord(char.upper()), 'x').upper()
+            hex_lower = format(ord(char.lower()), 'x').upper()
+            # Ensure two-digit format
+            hex_upper = hex_upper.zfill(2)
+            hex_lower = hex_lower.zfill(2)
+            hex_pattern_parts.append(f'({hex_upper}|{hex_lower})')
+
+    # Join all parts with an empty string to form the full regex pattern
+    hex_pattern = ''.join(hex_pattern_parts)
+    
+    # Return the regex pattern with anchors for start (^) and end ($)
+    return f'^{hex_pattern}$'
+
+# Example usage
+pattern = generate_hex_pattern("ninjaguardian68")
+print(pattern)
