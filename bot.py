@@ -9,7 +9,7 @@ from packaging.version import Version, parse
 import sys
 import os
 import subprocess
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any, NoReturn
 
 import time
 from discord.ext import commands
@@ -23,7 +23,6 @@ import io
 import aiohttp
 import aiofiles
 import functools
-import typing
 
 _EVENT_IMAGE_LOC = './eventimage.png'
 _VARS_CSV_LOC = './variables.csv'
@@ -78,7 +77,7 @@ def restartpythonscript(debug: bool = False):
         print("restart now")
     subprocess.call(["python", os.path.join(sys.path[0], __file__)] + sys.argv[1:])
 
-def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version]:
+def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version] | NoReturn:
     current_version = current_version_retriever(OFFSET, encoding, version_parser, debug) #Local
     latest_content = latest_content_retriever(GIT_TOKEN_LOC, REPO_LOC, encoding)
     latest_version = latest_version_retriever(latest_content, OFFSET, version_parser, debug) #Github
@@ -132,6 +131,9 @@ def hexadecimal_to_decimal(hexadecimal_str: str) -> int:
 def hex_to_ascii(hex_string: str) -> str:
     return bytes.fromhex(hex_string).decode('ascii')
 
+def ascii_to_hex(ascii_string: str) -> str:
+    return ascii_string.encode().hex().upper()
+
 def decode_encoded_string(encoded_string: bytes, encoding: str) -> str:
     return codecs.decode(encoded_string, encoding)
 
@@ -147,7 +149,7 @@ def minutefix() -> str:
     else:
         return str(datetime.now().minute)
 
-async def run_blocking(blocking_func: typing.Callable, bot: commands.Bot) -> typing.Any:
+async def run_blocking(blocking_func: Callable, bot: commands.Bot) -> Any: #TODO: should it not be any?
     """Runs a blocking function in a non-blocking way"""
     func = functools.partial(blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)

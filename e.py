@@ -1,84 +1,44 @@
 import csv
 import re
 
-def create_regex_pattern(input_string: str) -> str:
-    pattern = ''.join([f'[{char.upper()}{char.lower()}]' if char.isalpha() else char for char in input_string])
-    return pattern
+def hex_to_ascii(hex_string: str) -> str:
+    return bytes.fromhex(hex_string).decode('ascii')
 
-playerhex = "Ninjaguardian68".encode('utf-8').hex()
-pattern = re.compile(playerhex)
-print(playerhex)
-file = open('./variables.csv')
-type(file)
-csvreader = csv.reader(file)
-#print(header)
-for row in csvreader:
-    rowstr = str(row)
-    if not rowstr.find("kdr::uuidname") == -1:
-        if not rowstr.find(playerhex.upper()) == -1:
-            if not rowstr.find("]", 0, len(playerhex)+73) == -1: # makes sure it's an exact match
-                playeruuid = ""
-                for i in range(15,51):
-                    playeruuid = playeruuid+rowstr[i]
+def ascii_to_hex(ascii_string: str) -> str:
+    return ascii_string.encode().hex().upper()
 
-# # file = open('./variables.csv')
-# # type(file)
-# # csvreader = csv.reader(file)
-# # #print(header)
-# # for row in csv.reader(open('./variables.csv')):
-# #     rowstr = str(row)
-# #     if not rowstr.find("kdr::uuidname") == -1:
-# #             for row in csvreader:
-# #                 rowstr = str(row)
-# #                 if not rowstr.find("kdr::uuidname") == -1:
-# #                     if not rowstr.find(playerhex.upper()) == -1:
-# #                         if not rowstr.find("]", 0, len(playerhex)+73) == -1:
-# #                             playeruuid = ""
-# #                             for i in range(15,51):
-# #                                 playeruuid = playeruuid+rowstr[i]
-
-# # with open('./variables.csv') as file:
-# #     for row in csv.reader(file):
-# #         rowstr = str(row)
-# #         if not rowstr.find("kdr::uuidname") == -1:
-# #                 for row in csv.reader(file):
-# #                     rowstr = str(row)
-# #                     if not rowstr.find("kdr::uuidname") == -1:
-# #                         if not rowstr.find(playerhex.upper()) == -1:
-# #                             if not rowstr.find("]", 0, len(playerhex)+73) == -1:
-# #                                 playeruuid = ""
-# #                                 for i in range(15,51):
-# #                                     playeruuid = playeruuid+rowstr[i]
-
-
-# print(playeruuid)
-
-
-
-
-def generate_hex_pattern(s):
+def generate_username_regex(username: str) -> str:
     hex_pattern_parts = []
-
-    for char in s:
-        if char.isdigit():
-            # Convert digit to hex and format as (##)
-            hex_value = format(int(char), 'x').upper()
-            hex_pattern_parts.append(f'3{hex_value}')
-        elif char.isalpha():
-            # Convert letter to hex for both uppercase and lowercase
-            hex_upper = format(ord(char.upper()), 'x').upper()
-            hex_lower = format(ord(char.lower()), 'x').upper()
-            # Ensure two-digit format
-            hex_upper = hex_upper.zfill(2)
-            hex_lower = hex_lower.zfill(2)
+    for char in username:
+        if char.isalpha():
+            hex_upper = ascii_to_hex(char.upper()).upper().zfill(2)
+            hex_lower = ascii_to_hex(char.lower()).upper().zfill(2)
             hex_pattern_parts.append(f'({hex_upper}|{hex_lower})')
-
-    # Join all parts with an empty string to form the full regex pattern
+        else:
+            hex_pattern_parts.append(f'{ascii_to_hex(char)}')
     hex_pattern = ''.join(hex_pattern_parts)
-    
-    # Return the regex pattern with anchors for start (^) and end ($)
-    return f'^{hex_pattern}$'
+    return f'^ ....{hex_pattern}$'
 
-# Example usage
-pattern = generate_hex_pattern("ninjaguardian68")
-print(pattern)
+def get_uuid_manual(player: str) -> str | None: #TODO: add bedrock support
+    pattern = re.compile(generate_username_regex(player))
+    playeruuid = None
+
+    with open('./variables.csv') as file:
+        csvreader = csv.reader(file)
+        for row in csvreader:
+            try:
+                if not row[0].find("kdr::uuidname") == -1: # if the row contains the uuid and playerhex
+                    if pattern.fullmatch(row[2]): # if the player's hex is in the string
+                        playeruuid = row[0][13:] # grab the uuid
+            except IndexError:
+                pass # ignore things with no index
+    return playeruuid
+
+def get_uuid_api(player: str) -> str | None:
+    raise NotImplementedError
+
+playeruuid = get_uuid_manual(input("Input username\n>"))
+if isinstance(playeruuid, str):
+    print(f"{playeruuid}")
+else:
+    print("No uuid found")
