@@ -6,4 +6,6 @@ eventimage.png
 GITTOKEN.txt
 sftpPASS.txt
 sftpUSER.txt
+sftpPORT.txt
+sftpHOST.txt
 variables.csv

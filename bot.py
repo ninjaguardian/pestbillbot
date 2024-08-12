@@ -1,4 +1,4 @@
-#VERSION - 1.2.6.dev.1
+#VERSION - 2.0.0.dev.1
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on github
@@ -78,7 +78,7 @@ def restartpythonscript(debug: bool = False):
         print("restart now")
     subprocess.call(["python", os.path.join(sys.path[0], __file__)] + sys.argv[1:])
 
-def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> None:
+def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version]:
     current_version = current_version_retriever(OFFSET, encoding, version_parser, debug) #Local
     latest_content = latest_content_retriever(GIT_TOKEN_LOC, REPO_LOC, encoding)
     latest_version = latest_version_retriever(latest_content, OFFSET, version_parser, debug) #Github
@@ -94,32 +94,32 @@ def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding:
     elif current_version>=latest_version:
         if debug:
             print(f"No new version found ||Github: {latest_version}   Current: {current_version}||")
+        return (current_version,latest_version)
     else:
         raise ValueError("Error getting version")
 
 #--------------------------------------------------------------------------------------------------
-#TODO: deal with these global variables and deal with the rest of the stuff bellow and change the updater so it warns users about dev/beta versions. maybe add a way for the owner to do /setversion 1.8.3 or 1.8.3.dev1 or a version list gui.
-    with open(_SFTP_HOST_LOC, 'r') as f:
-        _SFTP_HOST = f.read()
-    with open(_SFTP_PORT_LOC, 'r') as f:
-        _SFTP_PORT = int(f.read())
-    with open(_SFTP_USER_LOC, 'r') as f:
-        _SFTP_USERNAME = f.read()
-    with open(_SFTP_PASS_LOC, 'r') as f:
-        _SFTP_PASSWORD = f.read()
+with open(_SFTP_HOST_LOC, 'r') as f:
+    _SFTP_HOST = f.read()
+with open(_SFTP_PORT_LOC, 'r') as f:
+    _SFTP_PORT = int(f.read())
+with open(_SFTP_USER_LOC, 'r') as f:
+    _SFTP_USERNAME = f.read()
+with open(_SFTP_PASS_LOC, 'r') as f:
+    _SFTP_PASSWORD = f.read()
 
-    _CnOpts = pysftp.CnOpts()
-    _CnOpts.hostkeys = None
+_CnOpts = pysftp.CnOpts('') #WARNING:All hosts are considered 'safe'
+_CnOpts.hostkeys = None
 
-    with open(_DISCORD_BOT_TOKEN_LOC, 'r') as f:
-        BOT_TOKEN = f.read()
+with open(_DISCORD_BOT_TOKEN_LOC, 'r') as f:
+    BOT_TOKEN = f.read()
 
-    bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
-    _PERMISSION_NOT_FOUND_EMBED = discord.Embed()
-    _PERMISSION_NOT_FOUND_EMBED.add_field(name="**HEY!**",value=str("""```ansi
-    [2;31m[2;31mYou do not have permission to do that![0m[2;31m[0m
-    ```"""))
+_PERMISSION_NOT_FOUND_EMBED = discord.Embed()
+_PERMISSION_NOT_FOUND_EMBED.add_field(name="**HEY!**",value=str("""```ansi
+[2;31m[2;31mYou do not have permission to do that![0m[2;31m[0m
+```"""))
 
 
 
@@ -135,17 +135,17 @@ def hex_to_ascii(hex_string: str) -> str:
 def decode_encoded_string(encoded_string: bytes, encoding: str) -> str:
     return codecs.decode(encoded_string, encoding)
 
-def is_server_owner(interaction: discord.Interaction):
-    if interaction.guild != None:
+def is_server_owner(interaction: discord.Interaction) -> bool:
+    if interaction.guild is not None:
         if interaction.user.id == interaction.guild.owner_id:
             return True
     return False
 
-def minutefix():
+def minutefix() -> str:
     if len(str(datetime.now().minute)) == 1:
         return "0"+str(datetime.now().minute)
     else:
-        return datetime.now().minute
+        return str(datetime.now().minute)
 
 async def run_blocking(blocking_func: typing.Callable, bot: commands.Bot) -> typing.Any:
     """Runs a blocking function in a non-blocking way"""
@@ -153,53 +153,63 @@ async def run_blocking(blocking_func: typing.Callable, bot: commands.Bot) -> typ
     return await bot.loop.run_in_executor(None, func)
 
 
-def getnewcsv():
+def getnewcsv(SFTP_HOST: str, SFTP_PORT: int, SFTP_USERNAME: str, SFTP_PASSWORD: str, CnOpts: pysftp.CnOpts, VARS_CSV_LOC: str, SFTP_CSV_LOC: str, debug: bool = False) -> None:
     try:
-        conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
-        CONNWORKED = True
-        print("connection established successfully")
-    except:
-        CONNWORKED = False
-        print('failed to establish connection to targeted server')
-    if CONNWORKED is True:
-        current_dir = conn.pwd
-        print('our current working directory is: ',current_dir)
-        print('available list of directories: ',conn.listdir())
-        if os.path.exists(VARS_CSV_LOC):
-            print("file removed")
-            os.remove(VARS_CSV_LOC)
-        conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
-        print("new file got")
-        read = []
-        with open(VARS_CSV_LOC, 'r') as f:
-            reader = csv.reader(f)
-            for line in reader:
-                read.append(line)
-            print("read new file")
-        with open(VARS_CSV_LOC, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
-            writer.writerows(read)
-            print('written')
+        with pysftp.Connection(host=SFTP_HOST,port=SFTP_PORT,username=SFTP_USERNAME, password=SFTP_PASSWORD,cnopts=CnOpts) as conn:
+            if debug:
+                print("connection established successfully")
+                current_dir = conn.pwd
+                print('our current working directory is: ',current_dir)
+                print('available list of directories: ',conn.listdir())
+            if os.path.exists(VARS_CSV_LOC):
+                if debug:
+                    print("file removed")
+                os.remove(VARS_CSV_LOC)
+            conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
+            if debug:
+                print("new file got")
+            read = []
+            with open(VARS_CSV_LOC, 'r') as f:
+                reader = csv.reader(f)
+                for line in reader:
+                    read.append(line)
+                if debug:
+                    print("read new file")
+            with open(VARS_CSV_LOC, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
+                writer.writerows(read)
+                if debug:
+                    print('written')
+    except (pysftp.AuthenticationException, pysftp.ConnectionException):
+        if debug:
+            print('failed to establish connection to targeted server')
+
 
 #Boot message
 @bot.event
-async def on_ready():
-    print(f"Bot is ready ({ver} on {system})")
+async def on_ready() -> None:
+    global MOD_ONLY_CHANNEL_ID
+    global _current_version
+    print(f"Bot is ready ({_current_version})")
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-    await channel.send(f"Bot is ready ({ver} on {system})")
+    assert not isinstance(channel,discord.abc.PrivateChannel)
+    assert not isinstance(channel,discord.ForumChannel)
+    assert not isinstance(channel,discord.CategoryChannel)
+    assert channel is not None
+    await channel.send(f"Bot is ready ({_current_version})")
 
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
         await channel.send(f"Synced {len(synced)} command(s)")
     except Exception as e:
-        print(e)
-        await channel.send(e)
+        print(str(e))
+        await channel.send(str(e))
 
 #off message
 @bot.event
-async def on_disconnect():
+async def on_disconnect() -> None:
     print("Turning bot off...")
 
 #if ctx.channel.id == CHANNEL_ID or discord.utils.get(ctx.guild.get_member(ctx.message.author.id).roles, id=BYPASS_ROLE):
@@ -214,17 +224,21 @@ async def on_disconnect():
 #    await interaction.response.send_message(f"Hello {interaction.user.mention}", ephemeral=True)
 
 @bot.tree.command(description="Shows the bot latency")
-async def ping(ctx):
+async def ping(ctx: discord.interactions.Interaction) -> None:
+    global bot
     SET_PING_EMBED=discord.Embed(title="Ping", color=int('1e63d4', 16))
     SET_PING_EMBED.add_field(name="",value=f'''The bot's ping is: {bot.latency}ms''',inline=False)
     await ctx.response.send_message(embed=SET_PING_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Gets the current pestbill event")
-async def event(ctx):
-    file = discord.File(EVENT_IMAGE_LOC, filename='eventimage.png')
-    with open(EVENT_COLOR_LOC, 'r') as f:
+async def event(ctx: discord.interactions.Interaction) -> None:
+    global _EVENT_IMAGE_LOC
+    global _EVENT_COLOR_LOC
+    global _EVENT_LOC
+    file = discord.File(_EVENT_IMAGE_LOC, filename='eventimage.png')
+    with open(_EVENT_COLOR_LOC, 'r') as f:
         EVENT_EMBED=discord.Embed(title="Event", color=int(f.read()))
-    with open(EVENT_LOC, 'r') as f:
+    with open(_EVENT_LOC, 'r') as f:
         EVENT_EMBED.add_field(name="",value=f"The current event is **{f.read()}**!", inline=False)
     EVENT_EMBED.set_thumbnail(url="attachment://eventimage.png")
 
@@ -234,9 +248,12 @@ async def event(ctx):
 @bot.tree.command(description="Sets the current event")
 @app_commands.describe(event = "Set the current event", hexcolor = "Color of embed sidebar as a hex color", imageurl = "URL of the image displayed")
 @app_commands.check(is_server_owner)
-async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None):
+async def setevent(ctx: discord.interactions.Interaction, event: str|None=None, hexcolor: str|None=None, imageurl: str|None=None) -> None:
+    global _EVENT_IMAGE_LOC
+    global _EVENT_LOC
+    global _EVENT_COLOR_LOC
     if imageurl is None:
-        file = discord.File(EVENT_IMAGE_LOC, filename='eventimage.png')
+        file = discord.File(_EVENT_IMAGE_LOC, filename='eventimage.png')
     else:
         async with aiohttp.ClientSession() as session:
             async with session.get(imageurl) as resp:
@@ -244,14 +261,14 @@ async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None)
                     await ctx.response.send_message("Could not download file!", ephemeral=True)
                 eventimgfiledata = io.BytesIO(await resp.read())
                 file = discord.File(eventimgfiledata, 'eventimage.png')
-                tempf = await aiofiles.open(EVENT_IMAGE_LOC, mode='wb')
+                tempf = await aiofiles.open(_EVENT_IMAGE_LOC, mode='wb')
                 await tempf.write(await resp.read())
                 await tempf.close()
     if event is None:
-        with open(EVENT_LOC, 'r') as f:
+        with open(_EVENT_LOC, 'r') as f:
             event = f.read()
     if hexcolor is None:
-        with open(EVENT_COLOR_LOC, 'r') as f:
+        with open(_EVENT_COLOR_LOC, 'r') as f:
             hexcolor = ""
             hexcolornohashtagconverted = decimal_to_hexadecimal(int(f.read()))
             for curchar in range(len(hexcolornohashtagconverted)-2):
@@ -262,33 +279,42 @@ async def setevent(ctx, event: str=None, hexcolor: str=None, imageurl: str=None)
     SET_EVENT_EMBED.add_field(value=f"Set the current event to: **{event}** and the color to **#{hexcolor}** ||decimal: **{int(hexcolor, 16)}**||", name="Image may not work as expected.", inline=False)
     SET_EVENT_EMBED.set_thumbnail(url="attachment://eventimage.png")
     await ctx.response.send_message(file=file, embed=SET_EVENT_EMBED, ephemeral=True)
-    with open(EVENT_LOC, 'w') as f:
+    with open(_EVENT_LOC, 'w') as f:
         f.write(f'{event}')
-    with open(EVENT_COLOR_LOC, 'w') as f:
+    with open(_EVENT_COLOR_LOC, 'w') as f:
         f.write(f'{int(hexcolor, 16) }')
 
 
 @setevent.error
-async def setevent_error(interaction: discord.Interaction, error):
-    if interaction.user.id == interaction.guild.owner_id:
-        await interaction.response.send_message(f"Don't add a #, add one of the https:// things. | {error}", ephemeral=True)
-    else:
-        await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
+async def setevent_error(interaction: discord.Interaction, error) -> None:
+    global _PERMISSION_NOT_FOUND_EMBED
+    if interaction.guild is not None:
+        if interaction.user.id == interaction.guild.owner_id:
+            await interaction.response.send_message(f"Don't add a #, add one of the https:// things. | {error}", ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Turns bot off")
 @app_commands.check(is_server_owner)
-async def shutdown(ctx):
-await ctx.response.send_message("Bot is being shut down...", ephemeral=True)
-channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-await channel.send("Shutting down bot!")
-await bot.close()
+async def shutdown(ctx: discord.interactions.Interaction) -> None:
+    global MOD_ONLY_CHANNEL_ID
+    await ctx.response.send_message("Bot is being shut down...", ephemeral=True)
+    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+    assert not isinstance(channel,discord.abc.PrivateChannel)
+    assert not isinstance(channel,discord.ForumChannel)
+    assert not isinstance(channel,discord.CategoryChannel)
+    assert channel is not None
+    await channel.send("Shutting down bot!")
+    await bot.close()
 
 @shutdown.error
-async def shutdown_error(interaction: discord.Interaction, error):
-    if interaction.user.id == interaction.guild.owner_id:
-        await interaction.response.send_message(f"idk what went wrong... {error}", ephemeral=True)
-    else:
-        await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
+async def shutdown_error(interaction: discord.Interaction, error) -> None:
+    global _PERMISSION_NOT_FOUND_EMBED
+    if interaction.guild is not None:
+        if interaction.user.id == interaction.guild.owner_id:
+            await interaction.response.send_message(f"idk what went wrong... {error}", ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 
 # @bot.tree.command(description="Updates bot.py and restarts bot")
@@ -310,29 +336,38 @@ async def shutdown_error(interaction: discord.Interaction, error):
 
 @bot.tree.command(description="Restarts bot (also updates)")
 @app_commands.check(is_server_owner)
-async def restartbot(ctx):
-await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
-channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-await channel.send("Updating/restarting bot!")
-await run_blocking(restartpythonscript)
+async def restartbot(ctx: discord.interactions.Interaction) -> None:
+    global MOD_ONLY_CHANNEL_ID
+    global bot
+    await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
+    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+    assert not isinstance(channel,discord.abc.PrivateChannel)
+    assert not isinstance(channel,discord.ForumChannel)
+    assert not isinstance(channel,discord.CategoryChannel)
+    assert channel is not None
+    await channel.send("Updating/restarting bot!")
+    await run_blocking(restartpythonscript, bot)
 
 
 @restartbot.error
-async def restartbot_error(interaction: discord.Interaction, error):
-    if interaction.user.id == interaction.guild.owner_id:
-        await interaction.edit_original_response(content=f"idk what went wrong... {error}")
-    else:
-        await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
+async def restartbot_error(interaction: discord.Interaction, error) -> None:
+    global _PERMISSION_NOT_FOUND_EMBED
+    if interaction.guild is not None:
+        if interaction.user.id == interaction.guild.owner_id:
+            await interaction.edit_original_response(content=f"idk what went wrong... {error}")
+        else:
+            await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Gets the player with the topkdr")
-async def topkdr(interaction: discord.Interaction):
+async def topkdr(interaction: discord.Interaction) -> None:
+    global _SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC
     topkdrresponsetimestart = time.time()
     await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
-    getnewcsv()
-    await interaction.edit_original_response(content=f"Loading... (finding topkdr)")
+    getnewcsv(_SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC)
+    await interaction.edit_original_response(content="Loading... (finding topkdr)")
     topkdrname = ''
 
-    for row in csv.reader(open(VARS_CSV_LOC)):
+    for row in csv.reader(open(_VARS_CSV_LOC)):
         rowstr = str(row)
         if not rowstr.find("topkdrname") == -1:
             for i in range(32,len(rowstr)-2):
@@ -347,7 +382,8 @@ async def topkdr(interaction: discord.Interaction):
 
 @bot.tree.command(description="Gets a player's kdr")
 @app_commands.describe(player = "The player to check")
-async def kdr(interaction: discord.Interaction, player: str):
+async def kdr(interaction: discord.Interaction, player: str) -> None:
+    global _SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC
     kdrresponsetimestart = time.time()
     await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
     # try:
@@ -377,7 +413,7 @@ async def kdr(interaction: discord.Interaction, player: str):
     #         writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
     #         writer.writerows(read)
     #         print('written')
-    getnewcsv()
+    getnewcsv(_SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC)
 
     await interaction.edit_original_response(content=f"Loading... (getting {player}'s data)")
 #____________________________________________
@@ -405,25 +441,23 @@ async def kdr(interaction: discord.Interaction, player: str):
     print(playerhexfix.upper())
 
 
-    file = open(VARS_CSV_LOC)
-    type(file)
-    csvreader = csv.reader(file)
     #print(header)
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find("kdr::uuidname") == -1:
-                for row in csvreader:
-                    rowstr = str(row)
-                    if not rowstr.find("kdr::uuidname") == -1:
-                        if not rowstr.find(playerhex.upper()) == -1:
-                            if not rowstr.find("]", 0, len(playerhex)+73) == -1:
-                                playeruuid = ""
-                                for i in range(15,51):
-                                    playeruuid = playeruuid+rowstr[i]
-                                    #print(rowstr[i])
-                                #print("---------------------------------")
-                                #print(row)
-                                #print(playeruuid)
+    with open(_VARS_CSV_LOC) as file:
+        for row in csv.reader(file):
+            rowstr = str(row)
+            if not rowstr.find("kdr::uuidname") == -1:
+                    for row in csv.reader(file):
+                        rowstr = str(row)
+                        if not rowstr.find("kdr::uuidname") == -1:
+                            if not rowstr.find(playerhex.upper()) == -1:
+                                if not rowstr.find("]", 0, len(playerhex)+73) == -1:
+                                    playeruuid = ""
+                                    for i in range(15,51):
+                                        playeruuid = playeruuid+rowstr[i]
+                                        #print(rowstr[i])
+                                    #print("---------------------------------")
+                                    #print(row)
+                                    #print(playeruuid)
 
 
     #print(rows)
@@ -640,10 +674,15 @@ Even if the stats file was recently downloaded, new stats are only added after a
 #/help
 
 if __name__ == "__main__":
+    _current_version, _latest_version = update_and_restart(_GITHUB_TOKEN_LOC,"ninjaguardian/pestbillbot",_VER_OFFSET,'utf-8',debug=True)
+
+
+    # CHANNEL_ID = 1139304414885183658
+    # MOD_ONLY_CHANNEL_ID = 1182685204775714887
+    # BYPASS_ROLE = 1139294768090853536
+    # PESTBILL_ID = 1139292425353973790
+    #make a config that the uses sets up so they choose where this goes
+    #make sure all globals are refrenceed with global. and all debugs are enabled
+    #setup debug for bot functions
+
     bot.run(BOT_TOKEN)
-
-
-    CHANNEL_ID = 1139304414885183658
-    MOD_ONLY_CHANNEL_ID = 1182685204775714887
-    BYPASS_ROLE = 1139294768090853536
-    PESTBILL_ID = 1139292425353973790
