@@ -1,12 +1,13 @@
-#VERSION - 2.0.0.dev.3
+#VERSION - 2.0.0.dev.4
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
-# By ninjaguardian on github
+# By ninjaguardian on GitHub
 
 from github import Github
 from github.ContentFile import ContentFile
 from packaging.version import Version, parse
 from sys import argv, executable, path
+from sys import exit as sys_exit
 
 from os import path as os_path
 from os import remove as os_remove
@@ -50,12 +51,34 @@ type _ENCODING = str | None
 
 #--------------------------------------------------------------------------------------------------
 def get_file_version(version_line: str, OFFSET: int) -> Version:
+    """
+    Converts a string into a version.
+
+    Args:
+        version_line (str): The line the version is on.
+        OFFSET (int): How many charecters before the version starts.
+
+    Returns:
+        Version: The converted version.
+    """
     VERSION = ''
     for current_char in range(len(version_line)-OFFSET):
         VERSION += version_line[current_char+OFFSET]
     return parse(VERSION)
 
 def get_current_file_version(OFFSET: int, encoding: _ENCODING = None, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Version:
+    """
+    Gets the version from the current file.
+
+    Args:
+        OFFSET (int): The offset to pass to version_parser.
+        encoding (_ENCODING, optional): The encoding the file uses. EXAMPLE: 'utf-8'. Defaults to None.
+        version_parser (_VERSION_PARSER, optional): Turns the str into a Version. Defaults to get_file_version.
+        debug (bool, optional): Enable debug outputs? Defaults to False.
+
+    Returns:
+        Version: The file version.
+    """
     with open(__file__, 'r', encoding=encoding) as f:
         current_line = f.readline().replace('\n','')
     current_version = version_parser(current_line, OFFSET)
@@ -63,33 +86,65 @@ def get_current_file_version(OFFSET: int, encoding: _ENCODING = None, version_pa
         print("Current:", current_version)
     return current_version
 
-def get_latest_file_contents(GIT_TOKEN_LOC: str, REPO_LOC: str, encoding: _ENCODING = None) -> bytes:
+def get_latest_file_contents(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, encoding: _ENCODING = None) -> bytes:
+    """
+    Gets the latest FILE_NAME from the repo REPO_LOC.
+
+    Args:
+        GIT_TOKEN_LOC (str): The path to the file that has the GitHub token.
+        REPO_LOC (str): The repo where FILE_NAME is stored. EXAMPLE: 'ninjaguardian/pestbillbot'.
+        FILE_NAME (str): The file name and extention of the file to get. EXAMPLE: 'bot.py'.
+        encoding (_ENCODING, optional): The encoding the file uses. EXAMPLE: 'utf-8'. Defaults to None.
+
+    Returns:
+        bytes: The returned file.
+    """
     with open(GIT_TOKEN_LOC, 'r', encoding=encoding) as f:
         g = Github(f.read())
     repo = g.get_repo(REPO_LOC)
-    contents = repo.get_contents('bot.py')
+    contents = repo.get_contents(FILE_NAME)
     assert isinstance(contents, ContentFile)
     return contents.decoded_content
 
 def get_latest_file_version(bytes_file: bytes, OFFSET: int, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Version:
+    """
+    Gets the lates file version from GitHub.
+
+    Args:
+        bytes_file (bytes): The file that has the version at the top.
+        OFFSET (int): The offset to pass to version_parser
+        version_parser (_VERSION_PARSER, optional): Turns the str into a Version. Defaults to get_file_version.
+        debug (bool, optional): Enable debug outputs? Defaults to False.
+
+    Returns:
+        Version: The file version from GitHub.
+    """
     decoded_str = bytes_file.decode("UTF-8")
     decoded_firstline = decoded_str.splitlines()[0]
     latest_version = version_parser(decoded_firstline, OFFSET)
     if debug:
-        print("Github:", latest_version)
+        print("GitHub:", latest_version)
     return latest_version
 
-def restartpythonscript(debug: bool = False):
+def restartpythonscript(debug: bool = False) -> NoReturn:
+    """
+    Restarts the python file. (WARNING: EXITS THE FILE)
+
+    Args:
+        debug (bool, optional): Enable debug outputs? Defaults to False.
+    """
+    global _latest_version
     if debug:
         print("argv was",argv)
         print(f"sys.executable was {executable}")
         print("restart now")
     call_subprocess(["python", os_path.join(path[0], __file__)] + argv[1:])
+    sys_exit(f"New version ran ({_latest_version})")
 
-def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version] | NoReturn:
+def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version] | NoReturn:
     current_version = current_version_retriever(OFFSET, encoding, version_parser, debug) #Local
-    latest_content = latest_content_retriever(GIT_TOKEN_LOC, REPO_LOC, encoding)
-    latest_version = latest_version_retriever(latest_content, OFFSET, version_parser, debug) #Github
+    latest_content = latest_content_retriever(GIT_TOKEN_LOC, REPO_LOC, FILE_NAME, encoding)
+    latest_version = latest_version_retriever(latest_content, OFFSET, version_parser, debug) #GitHub
     if latest_version>current_version:
         if debug:
             print(f"Downloading.... (Found: {latest_version})")
@@ -98,10 +153,9 @@ def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding:
         if debug:
             print(f"Downloaded and restarting. {latest_version}>{current_version}")
         restartpythonscript()
-        exit(f"New version ran ({latest_version})")
     elif current_version>=latest_version:
         if debug:
-            print(f"No new version found ||Github: {latest_version}   Current: {current_version}||")
+            print(f"No new version found ||GitHub: {latest_version}   Current: {current_version}||")
         return (current_version,latest_version)
     else:
         raise ValueError("Error getting version")
@@ -386,6 +440,7 @@ async def on_ready() -> None:
     assert not isinstance(channel,discord.CategoryChannel)
     assert channel is not None
     await channel.send(f"Bot is ready ({_current_version})")
+    await channel.send(f"Online version ({_latest_version})")
 
     try:
         synced = await bot.tree.sync()
@@ -403,8 +458,15 @@ async def on_disconnect() -> None:
 @bot.tree.command(description="Shows the bot latency")
 async def ping(ctx: discord.interactions.Interaction) -> None:
     global bot
+    global _latest_version
+    global _current_version
     SET_PING_EMBED=discord.Embed(title="Ping", color=int('1e63d4', 16))
-    SET_PING_EMBED.add_field(name="",value=f'''The bot's ping is: {bot.latency}ms''',inline=False)
+    if is_server_owner(ctx):
+        SET_PING_EMBED.add_field(name="",value=f'''The bot's ping is: {bot.latency}ms
+The bot is running v{_current_version}
+The GitHub shows v{_latest_version}''',inline=False)
+    else:
+        SET_PING_EMBED.add_field(name="",value=f'''The bot's ping is: {bot.latency}ms''',inline=False)
     await ctx.response.send_message(embed=SET_PING_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Gets the current pestbill event")
@@ -465,15 +527,14 @@ async def setevent(ctx: discord.interactions.Interaction, event: str|None=None, 
 @setevent.error
 async def setevent_error(interaction: discord.Interaction, error) -> None:
     global _PERMISSION_NOT_FOUND_EMBED
-    if interaction.guild is not None:
-        if interaction.user.id == interaction.guild.owner_id:
-            await interaction.response.send_message(f"Don't add a #, add one of the https:// things. | {error}", ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
+    if is_server_owner(interaction):
+        await interaction.response.send_message(f"Don't add a #, add one of the https:// things. | {error}", ephemeral=True)
+    else:
+        await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Turns bot off")
 @app_commands.check(is_server_owner)
-async def shutdown(ctx: discord.interactions.Interaction) -> None:
+async def shutdown(ctx: discord.interactions.Interaction) -> NoReturn:
     global MOD_ONLY_CHANNEL_ID
     global bot
     await ctx.response.send_message("Bot is being shut down...", ephemeral=True)
@@ -484,22 +545,23 @@ async def shutdown(ctx: discord.interactions.Interaction) -> None:
     assert channel is not None
     await channel.send("Shutting down bot!")
     await bot.close()
+    sys_exit('Bot has shut down!')
 
 @shutdown.error
 async def shutdown_error(interaction: discord.Interaction, error) -> None:
     global _PERMISSION_NOT_FOUND_EMBED
-    if interaction.guild is not None:
-        if interaction.user.id == interaction.guild.owner_id:
-            await interaction.response.send_message(f"idk what went wrong... {error}", ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
+    if is_server_owner(interaction):
+        await interaction.response.send_message(f"idk what went wrong... {error}", ephemeral=True)
+    else:
+        await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 
 @bot.tree.command(description="Restarts bot (also updates)")
 @app_commands.check(is_server_owner)
-async def restartbot(ctx: discord.interactions.Interaction) -> None:
+async def restartbot(ctx: discord.interactions.Interaction) -> NoReturn:
     global MOD_ONLY_CHANNEL_ID
     global bot
+    global _latest_version
     await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
     assert not isinstance(channel,discord.abc.PrivateChannel)
@@ -507,17 +569,16 @@ async def restartbot(ctx: discord.interactions.Interaction) -> None:
     assert not isinstance(channel,discord.CategoryChannel)
     assert channel is not None
     await channel.send("Updating/restarting bot!")
-    await run_blocking(restartpythonscript, bot)
-
+    await bot.close()
+    restartpythonscript()
 
 @restartbot.error
 async def restartbot_error(interaction: discord.Interaction, error) -> None:
     global _PERMISSION_NOT_FOUND_EMBED
-    if interaction.guild is not None:
-        if interaction.user.id == interaction.guild.owner_id:
-            await interaction.edit_original_response(content=f"idk what went wrong... {error}")
-        else:
-            await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
+    if is_server_owner(interaction):
+        await interaction.edit_original_response(content=f"idk what went wrong... {error}")
+    else:
+        await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Gets the player with the topkdr")
 async def topkdr(interaction: discord.Interaction) -> None:
@@ -538,42 +599,67 @@ async def topkdr(interaction: discord.Interaction) -> None:
     await interaction.edit_original_response(content=f"Loading... (getting {topkdrname}'s data)")
     await getkdr_nonbot(topkdrname,interaction,topkdrresponsetimestart)
 
+@topkdr.error
+async def topkdr_error(interaction: discord.Interaction, error) -> None:
+    global bot
+    global MOD_ONLY_CHANNEL_ID
+    if is_server_owner(interaction):
+        await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
+    else:
+        KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING TOPKDR!", color=int('fa2d1e', 16))
+        KDR_EMBED_ERROR.add_field(value='''> The player's name is CASE-SENSITIVE! Make sure you spelled it perfectly with no spaces.
+> The player may have had their stats wiped due to them being low.
+> The player may have not joined the game before.
+> DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
+        channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+        assert not isinstance(channel,discord.abc.PrivateChannel)
+        assert not isinstance(channel,discord.ForumChannel)
+        assert not isinstance(channel,discord.CategoryChannel)
+        assert channel is not None
+        await channel.send(f'''Someone had a kdr error!
+
+ctx: {interaction}
+
+error: {error}''')
+        await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
+
+
 @bot.tree.command(description="Gets a player's kdr")
 @app_commands.describe(player = "The player to check")
 async def kdr(interaction: discord.Interaction, player: str) -> None:
-    await getkdr_nonbot(player,interaction)
+    await interaction.response.send_message('Loading... (starting up)', ephemeral=True)
+    await getkdr_nonbot(player,interaction,time())
 
 @kdr.error
-async def kdr_error(interaction: discord.Interaction, error):
+async def kdr_error(interaction: discord.Interaction, error) -> None:
     global bot
     global MOD_ONLY_CHANNEL_ID
-    if interaction.guild is not None:
-        if interaction.user.id == interaction.guild.owner_id:
-            await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
-        else:
-            KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING KDR!", color=int('fa2d1e', 16))
-            KDR_EMBED_ERROR.add_field(value='''> The player's name is CASE-SENSITIVE! Make sure you spelled it perfectly with no spaces.
-    > The player may have had their stats wiped due to them being low.
-    > The player may have not joined the game before.
-    > DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
-            channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-            assert not isinstance(channel,discord.abc.PrivateChannel)
-            assert not isinstance(channel,discord.ForumChannel)
-            assert not isinstance(channel,discord.CategoryChannel)
-            assert channel is not None
-            await channel.send(f'''Someone had a kdr error!
+    if is_server_owner(interaction):
+        await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
+    else:
+        KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING TOPKDR!", color=int('fa2d1e', 16))
+        KDR_EMBED_ERROR.add_field(value='''> The player's name may violate naming rules.
+> The player may have had their stats wiped due to them being low.
+> The player may have not joined the game before.
+> DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
+        channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+        assert not isinstance(channel,discord.abc.PrivateChannel)
+        assert not isinstance(channel,discord.ForumChannel)
+        assert not isinstance(channel,discord.CategoryChannel)
+        assert channel is not None
+        await channel.send(f'''Someone had a topkdr error!
 
-    ctx: {interaction}
+ctx: {interaction}
 
-    error: {error}''')
-            await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
-
+error: {error}''')
+        await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
 
 
 
-async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrresponsetimestart: float = time()) -> None: #WARNING:may not work with names that have spaces
+
+async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrresponsetimestart: float) -> None: #WARNING:may not work with names that have spaces
     global _SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC,JavaApiResponse,BedrockApiResponse
-    await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
+    await interaction.edit_original_response(content='Loading... (getting variables.csv)')
     getnewcsv(_SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC)
     await interaction.edit_original_response(content=f"Loading... (getting {player}'s data)")
     player_data = get_data_api(player)
@@ -641,7 +727,7 @@ async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrrespon
 
     if topkdrname.lower() == player.lower():
         await interaction.edit_original_response(content="Loading... (Getting pronouns)")
-        KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('e0bd00', 16))
+        KDR_EMBED=discord.Embed(title=f"{player_spelled}'s KDR", color=int('e0bd00', 16))
         pronouns = fetch_pronouns(player_uuid)
         if len(pronouns) == 0:
             pronouns = ['they']
@@ -679,14 +765,14 @@ async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrrespon
                         subjective_pronoun = parse_pronoun('they').subjective.capitalize()
                         has_or_have = 'have'
 
-        KDR_EMBED.add_field(value=f'''{player}'s KDR is {round(kills/deaths,2)}!
+        KDR_EMBED.add_field(value=f'''{player_spelled}'s KDR is {round(kills/deaths,2)}!
 {subjective_pronoun} also {has_or_have} the **top kdr**!''', name="KDR", inline=False)
     else:
-        KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('fa2d1e', 16))
-        KDR_EMBED.add_field(value=f"{player}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
+        KDR_EMBED=discord.Embed(title=f"{player_spelled}'s KDR", color=int('fa2d1e', 16))
+        KDR_EMBED.add_field(value=f"{player_spelled}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
     await interaction.edit_original_response(content="Loading... (Sending)")
-    KDR_EMBED.add_field(value=f"{player}'s has {kills} kills!", name="Kills", inline=False)
-    KDR_EMBED.add_field(value=f'''{player}'s has {deaths} deaths!''', name="Deaths", inline=False)
+    KDR_EMBED.add_field(value=f"{player_spelled}'s has {kills} kills!", name="Kills", inline=False)
+    KDR_EMBED.add_field(value=f'''{player_spelled}'s has {deaths} deaths!''', name="Deaths", inline=False)
     KDR_EMBED.set_thumbnail(url='attachment://head.png')
     KDR_EMBED.set_footer(text=f'''{timestamp}
 Even if the stats file was recently downloaded, new stats are only added after a restart.''')
@@ -700,7 +786,7 @@ Even if the stats file was recently downloaded, new stats are only added after a
 
 
 if __name__ == "__main__":
-    _current_version, _latest_version = update_and_restart(_GITHUB_TOKEN_LOC,"ninjaguardian/pestbillbot",_VER_OFFSET,'utf-8',debug=True)
+    _current_version, _latest_version = update_and_restart(_GITHUB_TOKEN_LOC,"ninjaguardian/pestbillbot",'bot.py',_VER_OFFSET,'utf-8',debug=True)
 
 
     CHANNEL_ID = 1139304414885183658
