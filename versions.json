@@ -3,6 +3,10 @@
         "bot.py":"",
         "security_patch":""
     },
+    "stable": {
+        "bot.py":"",
+        "security_patch":""
+    },
     "2.0.0": {
         "bot.py":"",
         "security_patch":""
