@@ -1,7 +1,10 @@
-#VERSION - 2.0.0.dev.4
+#VERSION - 2.0.0.dev.5
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on GitHub
+
+import logging
+import traceback
 
 from github import Github
 from github.ContentFile import ContentFile
@@ -34,6 +37,14 @@ from aiohttp import ClientSession
 from aiofiles import open as open_async
 from functools import partial
 
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# logger = logging.getLogger('discord')
+# handler = logging.FileHandler(filename=f'./bot_logs/discord_{datetime.now().strftime('%Y-%m-%d_%H.%M.%S')}.log', encoding='utf-8', mode='w')
+# handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+# logger.addHandler(handler)
+# discord.utils.setup_logging(handler=handler)
+#TODO: show discord errors in logs. also get color formatting to work. i saw in setup_logging. Maybe branch off of the one they use and add our log format? check liine :441
+
 _EVENT_IMAGE_LOC = './eventimage.png'
 _VARS_CSV_LOC = './variables.csv'
 _EVENT_COLOR_LOC = './eventembedcolor.txt'
@@ -48,6 +59,7 @@ _SFTP_CSV_LOC = '/server/plugins/Skript/variables.csv'
 _VER_OFFSET = 11
 type _VERSION_PARSER = Callable[[str,int],Version]
 type _ENCODING = str | None
+
 
 #--------------------------------------------------------------------------------------------------
 def get_file_version(version_line: str, OFFSET: int) -> Version:
@@ -426,6 +438,9 @@ def parse_pronoun(pronoun: str) -> ParsedPronoun:
     else:
         return ParsedPronoun.model_validate({'subjective': pronoun,'objective': pronoun,'possessive': pronoun})
 
+# @bot.event
+# async def on_error(event, *args, **kwargs):
+#     logging.warning(traceback.format_exc()) #logs the error
 
 #Boot message
 @bot.event
