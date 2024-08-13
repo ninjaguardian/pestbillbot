@@ -1,4 +1,4 @@
-#VERSION - 2.0.0.dev.1
+#VERSION - 2.0.0.dev.2
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on github
@@ -6,23 +6,32 @@
 from github import Github
 from github.ContentFile import ContentFile
 from packaging.version import Version, parse
-import sys
-import os
-import subprocess
-from typing import Callable, Tuple, Any, NoReturn
+from sys import argv, executable, path
 
-import time
+from os import path as os_path
+from os import remove as os_remove
+from subprocess import call as call_subprocess
+from typing import Callable, Tuple, Any, NoReturn, Optional, IO
+from pydantic import BaseModel
+from re import compile as regex_compile
+from requests import get as get_request
+from pydantic_core._pydantic_core import ValidationError
+from requests.exceptions import Timeout as RequestTimeoutError
+from PIL._typing import StrOrBytesPath
+from PIL import Image, ImageDraw
+
+from time import time
 from discord.ext import commands
 from discord import app_commands
 import discord
 from datetime import datetime
-import csv
+from csv import reader as csv_reader
+from csv import writer as csv_writer
 import pysftp
-import codecs
-import io
-import aiohttp
-import aiofiles
-import functools
+from io import BytesIO
+from aiohttp import ClientSession
+from aiofiles import open as open_async
+from functools import partial
 
 _EVENT_IMAGE_LOC = './eventimage.png'
 _VARS_CSV_LOC = './variables.csv'
@@ -72,10 +81,10 @@ def get_latest_file_version(bytes_file: bytes, OFFSET: int, version_parser: _VER
 
 def restartpythonscript(debug: bool = False):
     if debug:
-        print("argv was",sys.argv)
-        print(f"sys.executable was {sys.executable}")
+        print("argv was",argv)
+        print(f"sys.executable was {executable}")
         print("restart now")
-    subprocess.call(["python", os.path.join(sys.path[0], __file__)] + sys.argv[1:])
+    call_subprocess(["python", os_path.join(path[0], __file__)] + argv[1:])
 
 def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version] | NoReturn:
     current_version = current_version_retriever(OFFSET, encoding, version_parser, debug) #Local
@@ -134,14 +143,92 @@ def hex_to_ascii(hex_string: str) -> str:
 def ascii_to_hex(ascii_string: str) -> str:
     return ascii_string.encode().hex().upper()
 
-def decode_encoded_string(encoded_string: bytes, encoding: str) -> str:
-    return codecs.decode(encoded_string, encoding)
-
 def is_server_owner(interaction: discord.Interaction) -> bool:
     if interaction.guild is not None:
         if interaction.user.id == interaction.guild.owner_id:
             return True
     return False
+
+def generate_username_regex(username: str) -> str:
+    hex_pattern_parts = []
+    for char in username:
+        if char.isalpha():
+            hex_upper = ascii_to_hex(char.upper()).upper().zfill(2)
+            hex_lower = ascii_to_hex(char.lower()).upper().zfill(2)
+            hex_pattern_parts.append(f'({hex_upper}|{hex_lower})')
+        else:
+            hex_pattern_parts.append(f'{ascii_to_hex(char)}')
+    hex_pattern = ''.join(hex_pattern_parts)
+    return f'^ ....{hex_pattern}$'
+
+def get_uuid_manual(player: str) -> str | None:
+    pattern = regex_compile(generate_username_regex(player))
+    playeruuid = None
+
+    with open('./variables.csv') as file:
+        csvreader = csv_reader(file)
+        for row in csvreader:
+            try:
+                if not row[0].find("kdr::uuidname") == -1: # if the row contains the uuid and playerhex
+                    if pattern.fullmatch(row[2]): # if the player's hex is in the string
+                        playeruuid = row[0][13:] # grab the uuid
+            except IndexError:
+                pass # ignore things with no index
+    return playeruuid
+
+def uuid_to_name_manual(uuid: str) -> str | None:
+    with open('./variables.csv') as file:
+        csvreader = csv_reader(file)
+        for row in csvreader:
+            try:
+                if row[0] == f"kdr::uuidname{uuid}": # if the row contains the uuid and playerhex
+                    return hex_to_ascii(row[2][5:])
+            except IndexError:
+                pass # ignore things with no index
+    return None
+
+class BedrockApiResponse(BaseModel):
+    gamertag: str
+    xuid: str
+    floodgateuid: str
+    icon: str
+    gamescore: str
+    accounttier: str
+    textureid: Optional[str] = None
+    skin: Optional[str]
+    linked: bool
+    java_uuid: Optional[str] = None
+    java_name: Optional[str] = None
+
+class JavaApiResponse(BaseModel):
+    username: str
+    uuid: str
+    skin: str
+    cape: Optional[str]
+    linked: bool
+    bedrock_gamertag: Optional[str] = None
+    bedrock_xuid: Optional[int] = None
+    bedrock_fuid: Optional[str] = None
+
+def get_data_api(player: str) -> BedrockApiResponse | JavaApiResponse | RequestTimeoutError | ValidationError:
+    with open('./mcprofilekey.txt') as file:
+        API_KEY = file.read()
+    bedrock = player[0] == '.'
+    data: JavaApiResponse | BedrockApiResponse
+    try:
+        if bedrock:
+            response = get_request(f'https://mcprofile.io/api/v1/bedrock/gamertag/{player[1:]}', headers={'x-api-key':API_KEY}, timeout=20)
+            bedrock_contents: dict[str,str|bool] = response.json()
+            data = BedrockApiResponse.model_validate(bedrock_contents)
+        else:
+            response = get_request(f'https://mcprofile.io/api/v1/java/username/{player}', headers={'x-api-key':API_KEY}, timeout=20)
+            java_contents: dict[str,str|bool|int] = response.json()
+            data = JavaApiResponse.model_validate(java_contents)
+    except RequestTimeoutError as eTimeoutError:
+        return eTimeoutError
+    except ValidationError as eValidationError:
+        return eValidationError
+    return data
 
 def minutefix() -> str:
     if len(str(datetime.now().minute)) == 1:
@@ -151,7 +238,7 @@ def minutefix() -> str:
 
 async def run_blocking(blocking_func: Callable, bot: commands.Bot) -> Any: #TODO: should it not be any?
     """Runs a blocking function in a non-blocking way"""
-    func = functools.partial(blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
+    func = partial(blocking_func) # `run_in_executor` doesn't support kwargs, `functools.partial` does
     return await bot.loop.run_in_executor(None, func)
 
 
@@ -163,22 +250,22 @@ def getnewcsv(SFTP_HOST: str, SFTP_PORT: int, SFTP_USERNAME: str, SFTP_PASSWORD:
                 current_dir = conn.pwd
                 print('our current working directory is: ',current_dir)
                 print('available list of directories: ',conn.listdir())
-            if os.path.exists(VARS_CSV_LOC):
+            if os_path.exists(VARS_CSV_LOC):
                 if debug:
                     print("file removed")
-                os.remove(VARS_CSV_LOC)
+                os_remove(VARS_CSV_LOC)
             conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
             if debug:
                 print("new file got")
             read = []
             with open(VARS_CSV_LOC, 'r') as f:
-                reader = csv.reader(f)
+                reader = csv_reader(f)
                 for line in reader:
                     read.append(line)
                 if debug:
                     print("read new file")
             with open(VARS_CSV_LOC, 'w', newline='') as f:
-                writer = csv.writer(f)
+                writer = csv_writer(f)
                 writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
                 writer.writerows(read)
                 if debug:
@@ -188,11 +275,110 @@ def getnewcsv(SFTP_HOST: str, SFTP_PORT: int, SFTP_USERNAME: str, SFTP_PASSWORD:
             print('failed to establish connection to targeted server')
 
 
+class Overlay:
+    NONE = 0
+    HEAD = 1
+    BODY = 2
+    BOTH = 3
+
+def get_head(img_path: StrOrBytesPath | IO[bytes], show_body: bool = True, overlay: int = Overlay.BOTH) -> Image.Image:
+    if not overlay == Overlay.NONE and not overlay == Overlay.HEAD and not overlay == Overlay.BODY and not overlay == Overlay.BOTH:
+        raise ValueError("Overlay must be one of: Overlay.NONE, Overlay.HEAD, Overlay.BODY, Overlay.BOTH")
+    with Image.open(img_path) as image:
+        cropped_image = image.crop((8, 8, 16, 16)) # get the head
+        if overlay == Overlay.HEAD or overlay == Overlay.BOTH:
+            region = image.crop((40, 8, 48, 16)) # get the overlay
+            cropped_image.paste(region, (0,0), region) # combine jead and overlay
+
+        cropped_image = cropped_image.resize((60, 60), Image.Resampling.NEAREST)  # Resize to 60x60
+
+        if show_body:
+            draw = ImageDraw.Draw(cropped_image) # initialize drawing
+
+            body_type_pixel = image.getpixel((43,48)) # Get a pixel that will have alpha channel == 0 when slim
+            assert isinstance(body_type_pixel,tuple) # make sure getpixel outputs a tuple
+
+            if body_type_pixel[3] == 0: #NOTE: SLIM (ALEX)
+                draw.rectangle([46, 25, 55, 58], outline="white", fill="white")
+                draw.rectangle([43, 33, 58, 46], outline="white", fill="white")
+
+                regions = [
+                    ((8, 8, 16, 16), (47, 26)), #NOTE: head
+                    ((40, 8, 48, 16), (47, 26)), #NOTE: head overlay
+                    ((20, 20, 28, 32), (47, 34)), #NOTE: torso
+                    ((20, 36, 28, 48), (47, 34)), #NOTE: torso overlay
+                    ((44, 20, 47, 32), (44, 34)), #NOTE: left arm
+                    ((44, 36, 47, 48), (44, 34)), #NOTE: left arm overlay
+                    ((36, 52, 39, 64), (55, 34)), #NOTE: right arm
+                    ((52, 52, 55, 64), (55, 34)), #NOTE: right arm overlay
+                    ((20, 52, 24, 64), (51, 46)), #NOTE: right leg
+                    ((4, 52, 8, 64), (51, 46)), #NOTE: right leg overlay
+                    ((4, 20, 8, 32), (47, 46)), #NOTE: left leg
+                    ((4, 36, 8, 48), (47, 46)) #NOTE: left leg overlay
+                ]
+
+            else: #NOTE: THICK (STEVE)
+                draw.rectangle([45, 25, 54, 58], outline="white", fill="white")
+                draw.rectangle([41, 33, 58, 46], outline="white", fill="white")
+
+                regions = [
+                    ((8, 8, 16, 16), (46, 26)), #NOTE: head
+                    ((40, 8, 48, 16), (46, 26)), #NOTE: head overlay
+                    ((20, 20, 28, 32), (46, 34)), #NOTE: torso
+                    ((20, 36, 28, 48), (46, 34)), #NOTE: torso overlay
+                    ((44, 20, 48, 32), (42, 34)), #NOTE: left arm
+                    ((44, 36, 48, 48), (42, 34)), #NOTE: left arm overlay
+                    ((36, 52, 40, 64), (54, 34)), #NOTE: right arm
+                    ((52, 52, 56, 64), (54, 34)), #NOTE: right arm overlay
+                    ((20, 52, 24, 64), (50, 46)), #NOTE: right leg
+                    ((4, 52, 8, 64), (50, 46)), #NOTE: right leg overlay
+                    ((4, 20, 8, 32), (46, 46)), #NOTE: left leg
+                    ((4, 36, 8, 48), (46, 46)) #NOTE: left leg overlay
+                ]
+
+            for idx, (original_box, new_pos) in enumerate(regions):
+                if overlay == Overlay.BODY or overlay == Overlay.BOTH:
+                    region = image.crop(original_box)
+                    cropped_image.paste(region, new_pos, region)
+                else:
+                    if idx % 2 == 0:
+                        region = image.crop(original_box)
+                        cropped_image.paste(region, new_pos, region)
+
+    return cropped_image
+
+def fetch_pronouns(uuid: str) -> list[str]:
+    try:
+        request = get_request(f'https://pronoundb.org/api/v2/lookup?platform=minecraft&ids={uuid}',timeout=20)
+        data: list[str] = request.json()[uuid]['sets']['en']
+        return data
+    except RequestTimeoutError:
+        return []
+
+class ParsedPronoun(BaseModel):
+    subjective: str
+    objective: str
+    possessive: str
+
+def parse_pronoun(pronoun: str) -> ParsedPronoun:
+    if pronoun == 'he':
+        return ParsedPronoun.model_validate({'subjective':'he','objective':'him','possessive':'his'})
+    elif pronoun == 'it':
+        return ParsedPronoun.model_validate({'subjective':'it','objective':'it','possessive':'its'})
+    elif pronoun == 'she':
+        return ParsedPronoun.model_validate({'subjective':'she','objective':'her','possessive':'hers'})
+    elif pronoun == 'they':
+        return ParsedPronoun.model_validate({'subjective':'they','objective':'them','possessive':'theirs'})
+    else:
+        return ParsedPronoun.model_validate({'subjective': pronoun,'objective': pronoun,'possessive': pronoun})
+
+
 #Boot message
 @bot.event
 async def on_ready() -> None:
     global MOD_ONLY_CHANNEL_ID
     global _current_version
+    global bot
     print(f"Bot is ready ({_current_version})")
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
     assert not isinstance(channel,discord.abc.PrivateChannel)
@@ -213,17 +399,6 @@ async def on_ready() -> None:
 @bot.event
 async def on_disconnect() -> None:
     print("Turning bot off...")
-
-#if ctx.channel.id == CHANNEL_ID or discord.utils.get(ctx.guild.get_member(ctx.message.author.id).roles, id=BYPASS_ROLE):
-#runs if message sent in CHANNEL_ID or by user with BYPASS_ROLE
-
-#@commands.has_role(BYPASS_ROLE)
-#Must have BYPASS_ROLE to run
-
-#slash command that only sender can see response too
-#@bot.tree.command(name="hello")
-#async def hello(interaction: discord.Interaction):
-#    await interaction.response.send_message(f"Hello {interaction.user.mention}", ephemeral=True)
 
 @bot.tree.command(description="Shows the bot latency")
 async def ping(ctx: discord.interactions.Interaction) -> None:
@@ -257,15 +432,15 @@ async def setevent(ctx: discord.interactions.Interaction, event: str|None=None, 
     if imageurl is None:
         file = discord.File(_EVENT_IMAGE_LOC, filename='eventimage.png')
     else:
-        async with aiohttp.ClientSession() as session:
+        async with ClientSession() as session:
             async with session.get(imageurl) as resp:
                 if resp.status != 200:
                     await ctx.response.send_message("Could not download file!", ephemeral=True)
-                eventimgfiledata = io.BytesIO(await resp.read())
+                eventimgfiledata = BytesIO(await resp.read())
                 file = discord.File(eventimgfiledata, 'eventimage.png')
-                tempf = await aiofiles.open(_EVENT_IMAGE_LOC, mode='wb')
-                await tempf.write(await resp.read())
-                await tempf.close()
+                async with open_async(_EVENT_IMAGE_LOC, mode='wb') as tempf:
+                    timed = await resp.read()
+                    await tempf.write(timed)
     if event is None:
         with open(_EVENT_LOC, 'r') as f:
             event = f.read()
@@ -300,6 +475,7 @@ async def setevent_error(interaction: discord.Interaction, error) -> None:
 @app_commands.check(is_server_owner)
 async def shutdown(ctx: discord.interactions.Interaction) -> None:
     global MOD_ONLY_CHANNEL_ID
+    global bot
     await ctx.response.send_message("Bot is being shut down...", ephemeral=True)
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
     assert not isinstance(channel,discord.abc.PrivateChannel)
@@ -318,23 +494,6 @@ async def shutdown_error(interaction: discord.Interaction, error) -> None:
         else:
             await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
-
-# @bot.tree.command(description="Updates bot.py and restarts bot")
-# @app_commands.check(is_server_owner)
-# async def updatebot(ctx):
-#    await ctx.response.send_message("Updating and restarting bot!", ephemeral=True)
-#    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-#    await channel.send("Updating and restarting bot!")
-#    await run_blocking(updateandrestartbot)
-#    await ctx.edit_original_response(content="Updated? Maybe?")
-
-
-# @updatebot.error
-# async def updatebot_error(interaction: discord.Interaction, error):
-#     if interaction.user.id == interaction.guild.owner_id:
-#         await interaction.edit_original_response(content=f"idk what went wrong... {error}")
-#     else:
-#         await interaction.response.send_message(embed=PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
 @bot.tree.command(description="Restarts bot (also updates)")
 @app_commands.check(is_server_owner)
@@ -363,328 +522,190 @@ async def restartbot_error(interaction: discord.Interaction, error) -> None:
 @bot.tree.command(description="Gets the player with the topkdr")
 async def topkdr(interaction: discord.Interaction) -> None:
     global _SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC
-    topkdrresponsetimestart = time.time()
+    topkdrresponsetimestart = time()
     await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
     getnewcsv(_SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC)
     await interaction.edit_original_response(content="Loading... (finding topkdr)")
     topkdrname = ''
 
-    for row in csv.reader(open(_VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find("topkdrname") == -1:
-            for i in range(32,len(rowstr)-2):
-                #print(rowstr[i])
-                topkdrname = topkdrname+rowstr[i]
-    topkdrnameencode = topkdrname.encode('utf-8')
-    topkdrnamefinal = hex_to_ascii(decode_encoded_string(topkdrnameencode, 'utf-8'))
-    await interaction.edit_original_response(content=f"Loading... (getting {topkdrnamefinal}'s data)")
-    embedout= await getkdr_nonbot(topkdrnamefinal,interaction)
-    topkdrresponsetimeend = time.time()-topkdrresponsetimestart
-    await interaction.edit_original_response(content=f"Time taken ≈ {topkdrresponsetimeend} seconds",embed=embedout)
+    with open(_VARS_CSV_LOC) as file:
+        for row in csv_reader(file):
+            try:
+                if row[0] == "topkdrname":
+                        topkdrname = hex_to_ascii(row[2][5:])
+            except IndexError:
+                pass # ignore things with no index
+    await interaction.edit_original_response(content=f"Loading... (getting {topkdrname}'s data)")
+    await getkdr_nonbot(topkdrname,interaction,topkdrresponsetimestart)
 
 @bot.tree.command(description="Gets a player's kdr")
 @app_commands.describe(player = "The player to check")
 async def kdr(interaction: discord.Interaction, player: str) -> None:
-    global _SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC
-    kdrresponsetimestart = time.time()
-    await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
-    # try:
-    #     conn = pysftp.Connection(host=host,port=port,username=username, password=password,cnopts=cnopts)
-    #     CONNWORKED = True
-    #     print("connection established successfully")
-    # except:
-    #     CONNWORKED = False
-    #     print('failed to establish connection to targeted server')
-    # if CONNWORKED is True:
-    #     current_dir = conn.pwd
-    #     print('our current working directory is: ',current_dir)
-    #     print('available list of directories: ',conn.listdir())
-    #     if os.path.exists(VARS_CSV_LOC):
-    #         print("file removed")
-    #         os.remove(VARS_CSV_LOC)
-    #     conn.get(SFTP_CSV_LOC, localpath=VARS_CSV_LOC)
-    #     print("new file got")
-    #     read = []
-    #     with open(VARS_CSV_LOC, 'r') as f:
-    #         reader = csv.reader(f)
-    #         for line in reader:
-    #             read.append(line)
-    #         print("read new file")
-    #     with open(VARS_CSV_LOC, 'w', newline='') as f:
-    #         writer = csv.writer(f)
-    #         writer.writerow([f"Data last updated {datetime.now().month}/{datetime.now().day}/{datetime.now().year} {datetime.now().hour}:{minutefix()} (MM/DD/YYYY HH:MM CST)"])
-    #         writer.writerows(read)
-    #         print('written')
-    getnewcsv(_SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC)
-
-    await interaction.edit_original_response(content=f"Loading... (getting {player}'s data)")
-#____________________________________________
-
-    playerhex = player.encode('utf-8').hex()
-    playerhexfix = ""
-    PHLEN = 0
-    for i in playerhex:
-        PHLEN = PHLEN+1
-    #PHLENHALF = int(PHLEN/2)
-    #print(f"{PHLEN}/2={PHLENHALF}")
-    # CURRENTVALUEPHFIX = 0
-    # for i in range(PHLENHALF):
-    #     if '6a' in playerhex[CURRENTVALUEPHFIX]+playerhex[CURRENTVALUEPHFIX+1]:
-    #         playerhexfix = playerhexfix+"4a"
-    #     else:              #6a and 4a are j and J
-    #         playerhexfix = playerhexfix+str(playerhex[CURRENTVALUEPHFIX]+playerhex[CURRENTVALUEPHFIX+1])
-    #     CURRENTVALUEPHFIX = CURRENTVALUEPHFIX+2
-    #print(f"playerhexfix>{playerhexfix}")
-
-
-
-
-    print(playerhex.upper())
-    print(playerhexfix.upper())
-
-
-    #print(header)
-    with open(_VARS_CSV_LOC) as file:
-        for row in csv.reader(file):
-            rowstr = str(row)
-            if not rowstr.find("kdr::uuidname") == -1:
-                    for row in csv.reader(file):
-                        rowstr = str(row)
-                        if not rowstr.find("kdr::uuidname") == -1:
-                            if not rowstr.find(playerhex.upper()) == -1:
-                                if not rowstr.find("]", 0, len(playerhex)+73) == -1:
-                                    playeruuid = ""
-                                    for i in range(15,51):
-                                        playeruuid = playeruuid+rowstr[i]
-                                        #print(rowstr[i])
-                                    #print("---------------------------------")
-                                    #print(row)
-                                    #print(playeruuid)
-
-
-    #print(rows)
-    killshex=""
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find(f"kills::{playeruuid}") == -1:
-            print(row)
-            for i in range(59,75):
-                killshex=killshex+rowstr[i]
-    #print(playeruuid)
-    kills=hexadecimal_to_decimal(killshex)
-    print(kills)
-
-    deathshex=""
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find(f"deaths::{playeruuid}") == -1:
-            print(row)
-            for i in range(60,76):
-                deathshex=deathshex+rowstr[i]
-    #print(playeruuid)
-    deaths=hexadecimal_to_decimal(deathshex)
-    print(deaths)
-
-    await interaction.edit_original_response(content=f"Loading... (Finalizing)")
-
-
-    timestamp = ""
-    gettimestampcurrentrow = 0
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        if gettimestampcurrentrow == 0:
-            gettimestampcurrentrow = 1
-            timestamp = row[0]
-            print(row)
-
-
-    topkdrname = ''
-
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find("topkdrname") == -1:
-            for i in range(32,len(rowstr)-2):
-                #print(rowstr[i])
-                topkdrname = topkdrname+rowstr[i]
-    topkdrnameencode = topkdrname.encode('utf-8')
-    topkdrnamefinal = hex_to_ascii(decode_encoded_string(topkdrnameencode, 'utf-8'))
-
-
-    if topkdrnamefinal == player:
-        KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('e0bd00', 16))
-        KDR_EMBED.add_field(value=f'''{player}'s KDR is {round(kills/deaths,2)}!
-They also have the **top kdr**!''', name="KDR", inline=False)
-    else:
-        KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('fa2d1e', 16))
-        KDR_EMBED.add_field(value=f"{player}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
-    KDR_EMBED.add_field(value=f"{player}'s has {kills} kills!", name="Kills", inline=False)
-    # KDR_EMBED.add_field(value=f'''{player}'s has {deaths} deaths!\n\nIf these numbers are wierdly big, wait a bit and try again. If it's not fixed, contact <@733487800124571679>''', name="Deaths", inline=False)
-    KDR_EMBED.add_field(value=f'''{player}'s has {deaths} deaths!''', name="Deaths", inline=False)
-    KDR_EMBED.set_thumbnail(url=f'https://mc-heads.net/combo/{player}')
-    KDR_EMBED.set_footer(text=f'''{timestamp}
-Even if the stats file was recently downloaded, new stats are only added after a restart.''')
-    kdrresponsetimeend = time.time()
-    kdrresponsetime = kdrresponsetimeend-kdrresponsetimestart
-    await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED)
-
-
-
-#____________________________________________
+    await getkdr_nonbot(player,interaction)
 
 @kdr.error
 async def kdr_error(interaction: discord.Interaction, error):
-    if interaction.user.id == interaction.guild.owner_id:
-        await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
+    global bot
+    global MOD_ONLY_CHANNEL_ID
+    if interaction.guild is not None:
+        if interaction.user.id == interaction.guild.owner_id:
+            await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
+        else:
+            KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING KDR!", color=int('fa2d1e', 16))
+            KDR_EMBED_ERROR.add_field(value='''> The player's name is CASE-SENSITIVE! Make sure you spelled it perfectly with no spaces.
+    > The player may have had their stats wiped due to them being low.
+    > The player may have not joined the game before.
+    > DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
+            channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+            assert not isinstance(channel,discord.abc.PrivateChannel)
+            assert not isinstance(channel,discord.ForumChannel)
+            assert not isinstance(channel,discord.CategoryChannel)
+            assert channel is not None
+            await channel.send(f'''Someone had a kdr error!
+
+    ctx: {interaction}
+
+    error: {error}''')
+            await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
+
+
+
+
+async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrresponsetimestart: float = time()) -> None: #WARNING:may not work with names that have spaces
+    global _SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC,JavaApiResponse,BedrockApiResponse
+    await interaction.response.send_message('Loading... (getting variables.csv)', ephemeral=True)
+    getnewcsv(_SFTP_HOST,_SFTP_PORT,_SFTP_USERNAME,_SFTP_PASSWORD,_CnOpts,_VARS_CSV_LOC,_SFTP_CSV_LOC)
+    await interaction.edit_original_response(content=f"Loading... (getting {player}'s data)")
+    player_data = get_data_api(player)
+    if isinstance(player_data,JavaApiResponse): #This and the next few lines parse the player_data or do it manualy if needed
+        player_uuid = player_data.uuid
+        player_skin: str | None = player_data.skin
+        player_spelled = player_data.username
+    elif isinstance(player_data,BedrockApiResponse):
+        player_uuid = player_data.floodgateuid
+        player_skin = player_data.skin
+        player_spelled = player_data.gamertag
+    elif isinstance(player_data,RequestTimeoutError):
+        await interaction.edit_original_response(content="Loading... (Error: Can't access API. Falling back to manual.)")
+        manual_uuid = get_uuid_manual(player)
+        if manual_uuid is None:
+            raise NotImplementedError("Player is not registered") #FIXME:
+        else:
+            player_uuid = manual_uuid
+            player_skin = None
+            temp_name = uuid_to_name_manual(player_uuid)
+            if temp_name is None:
+                player_spelled = player
+            else:
+                player_spelled = temp_name
+    elif isinstance(player_data,ValidationError):
+        raise NotImplementedError("Player does not exist") #FIXME:
     else:
-        KDR_EMBED_ERROR=discord.Embed(title=f"ERROR WHILE FETCHING KDR!", color=int('fa2d1e', 16))
-        KDR_EMBED_ERROR.add_field(value='''> The player's name is CASE-SENSITIVE! Make sure you spelled it perfectly with no spaces.
-> The player may have had their stats wiped due to them being low.
-> The player may have not joined the game before.
-> DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
-        await bot.get_channel(MOD_ONLY_CHANNEL_ID).send(f'''Someone had a kdr error!
+        raise ValueError("player_data uknown type")
 
-ctx: {interaction}
+    await interaction.edit_original_response(content="Loading... (Parsing data)")
 
-error: {error}''')
-        await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
-
-
-
-
-
-async def getkdr_nonbot(player: str,input_interaction: discord.Interaction):
-    playerhex = player.encode('utf-8').hex()
-    playerhexfix = ""
-    PHLEN = 0
-    for i in playerhex:
-        PHLEN = PHLEN+1
-    #PHLENHALF = int(PHLEN/2)
-    #print(f"{PHLEN}/2={PHLENHALF}")
-    # CURRENTVALUEPHFIX = 0
-    # for i in range(PHLENHALF):
-    #     if '6a' in playerhex[CURRENTVALUEPHFIX]+playerhex[CURRENTVALUEPHFIX+1]:
-    #         playerhexfix = playerhexfix+"4a"
-    #     else:              #6a and 4a are j and J
-    #         playerhexfix = playerhexfix+str(playerhex[CURRENTVALUEPHFIX]+playerhex[CURRENTVALUEPHFIX+1])
-    #     CURRENTVALUEPHFIX = CURRENTVALUEPHFIX+2
-    #print(f"playerhexfix>{playerhexfix}")
-
-
-
-
-    print(playerhex.upper())
-    print(playerhexfix.upper())
-
-
-    file = open(VARS_CSV_LOC)
-    type(file)
-    csvreader = csv.reader(file)
-    #print(header)
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find("kdr::uuidname") == -1:
-                for row in csvreader:
-                    rowstr = str(row)
-                    if not rowstr.find("kdr::uuidname") == -1:
-                        if not rowstr.find(playerhex.upper()) == -1:
-                            if not rowstr.find("]", 0, len(playerhex)+73) == -1:
-                                playeruuid = ""
-                                for i in range(15,51):
-                                    playeruuid = playeruuid+rowstr[i]
-                                    #print(rowstr[i])
-                                #print("---------------------------------")
-                                #print(row)
-                                #print(playeruuid)
-
-
-    #print(rows)
-    killshex=""
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find(f"kills::{playeruuid}") == -1:
-            print(row)
-            for i in range(59,75):
-                killshex=killshex+rowstr[i]
-    #print(playeruuid)
-    kills=hexadecimal_to_decimal(killshex)
-    print(kills)
-
-    deathshex=""
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find(f"deaths::{playeruuid}") == -1:
-            print(row)
-            for i in range(60,76):
-                deathshex=deathshex+rowstr[i]
-    #print(playeruuid)
-    deaths=hexadecimal_to_decimal(deathshex)
-    print(deaths)
-
-    await input_interaction.edit_original_response(content=f"Loading... (Finalizing)")
-
-    timestamp = ""
-    gettimestampcurrentrow = 0
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        if gettimestampcurrentrow == 0:
-            gettimestampcurrentrow = 1
-            timestamp = row[0]
-            print(row)
-
-
+    timestamp = ''
+    kills = 0
+    deaths = 0
     topkdrname = ''
 
-    for row in csv.reader(open(VARS_CSV_LOC)):
-        rowstr = str(row)
-        if not rowstr.find("topkdrname") == -1:
-            for i in range(32,len(rowstr)-2):
-                #print(rowstr[i])
-                topkdrname = topkdrname+rowstr[i]
-    topkdrnameencode = topkdrname.encode('utf-8')
-    topkdrnamefinal = hex_to_ascii(decode_encoded_string(topkdrnameencode, 'utf-8'))
+    with open(_VARS_CSV_LOC) as file:
+        for idx,row in enumerate(csv_reader(file)):
+            try:
+                if idx == 0:
+                    timestamp = row[0]
+                if row[0] == f"kills::{player_uuid}":
+                    kills=hexadecimal_to_decimal(row[2])
+                if row[0] == f"deaths::{player_uuid}":
+                    deaths=hexadecimal_to_decimal(row[2])
+                if row[0] == "topkdrname":
+                    topkdrname=hex_to_ascii(row[2][5:])
+            except IndexError:
+                pass # ignore things with no index
 
+    await interaction.edit_original_response(content="Loading... (Finalizing)")
 
-    if topkdrnamefinal == player:
+    if player_skin is None:
+        head_img: str | Image.Image = f'https://mc-heads.net/combo/{player}'
+        attachment_file = None
+    else:
+        try:
+            response = get_request(player_skin,timeout=20)
+            head_img = get_head(BytesIO(response.content))
+            head_img.save('./head.png')
+            attachment_file = discord.File('./head.png')
+        except RequestTimeoutError:
+            head_img = f'https://mc-heads.net/combo/{player}'
+            attachment_file = None
+
+    if topkdrname.lower() == player.lower():
+        await interaction.edit_original_response(content="Loading... (Getting pronouns)")
         KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('e0bd00', 16))
+        pronouns = fetch_pronouns(player_uuid)
+        if len(pronouns) == 0:
+            pronouns = ['they']
+        match pronouns[0]:
+            case 'he':
+                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                has_or_have = 'has'
+            case 'it':
+                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                has_or_have = 'has'
+            case 'she':
+                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                has_or_have = 'has'
+            case 'avoid':
+                subjective_pronoun = player_spelled
+                has_or_have = 'has'
+            case 'they':
+                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                has_or_have = 'have'
+            case _:
+                match pronouns[1]:
+                    case 'he':
+                        subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
+                        has_or_have = 'has'
+                    case 'it':
+                        subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
+                        has_or_have = 'has'
+                    case 'she':
+                        subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
+                        has_or_have = 'has'
+                    case 'avoid':
+                        subjective_pronoun = player_spelled
+                        has_or_have = 'has'
+                    case _:
+                        subjective_pronoun = parse_pronoun('they').subjective.capitalize()
+                        has_or_have = 'have'
+
         KDR_EMBED.add_field(value=f'''{player}'s KDR is {round(kills/deaths,2)}!
-They also have the **top kdr**!''', name="KDR", inline=False)
+{subjective_pronoun} also {has_or_have} the **top kdr**!''', name="KDR", inline=False)
     else:
         KDR_EMBED=discord.Embed(title=f"{player}'s KDR", color=int('fa2d1e', 16))
         KDR_EMBED.add_field(value=f"{player}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
+    await interaction.edit_original_response(content="Loading... (Sending)")
     KDR_EMBED.add_field(value=f"{player}'s has {kills} kills!", name="Kills", inline=False)
-    # KDR_EMBED.add_field(value=f'''{player}'s has {deaths} deaths!\n\nIf these numbers are wierdly big, wait a bit and try again. If it's not fixed, contact <@733487800124571679>''', name="Deaths", inline=False)
     KDR_EMBED.add_field(value=f'''{player}'s has {deaths} deaths!''', name="Deaths", inline=False)
-    KDR_EMBED.set_thumbnail(url=f'https://mc-heads.net/combo/{player}')
+    KDR_EMBED.set_thumbnail(url='attachment://head.png')
     KDR_EMBED.set_footer(text=f'''{timestamp}
 Even if the stats file was recently downloaded, new stats are only added after a restart.''')
-    kdrresponsetimeend = time.time()
-    return KDR_EMBED
+    kdrresponsetimeend = time()
+    kdrresponsetime = kdrresponsetimeend-kdrresponsetimestart
+    if attachment_file is None:
+        await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED)
+    else:
+        await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED,attachments=[attachment_file])
 
 
-
-
-
-#pestbill water freezes
-#leave messages dont show up for me (maybe donkey) in discordsrv
-
-#topkdr npc sending kdr value
-
-#example. /kdr a. someone with name starting with a might get selected instead of nobody. (presumably fixed)
-
-#leaderboard
-
-#more stuff in bot-console
-#non case sensitive var
-#/help
 
 if __name__ == "__main__":
     _current_version, _latest_version = update_and_restart(_GITHUB_TOKEN_LOC,"ninjaguardian/pestbillbot",_VER_OFFSET,'utf-8',debug=True)
 
 
-    # CHANNEL_ID = 1139304414885183658
-    # MOD_ONLY_CHANNEL_ID = 1182685204775714887
-    # BYPASS_ROLE = 1139294768090853536
-    # PESTBILL_ID = 1139292425353973790
-    #make a config that the uses sets up so they choose where this goes
-    #make sure all globals are refrenceed with global. and all debugs are enabled
-    #setup debug for bot functions
+    CHANNEL_ID = 1139304414885183658
+    MOD_ONLY_CHANNEL_ID = 1182685204775714887
+    BYPASS_ROLE = 1139294768090853536
+    PESTBILL_ID = 1139292425353973790
 
     bot.run(BOT_TOKEN)
