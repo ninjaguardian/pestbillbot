@@ -1,4 +1,4 @@
-#VERSION - 2.0.0.dev.2
+#VERSION - 2.0.0.dev.3
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on github
@@ -51,13 +51,13 @@ type _ENCODING = str | None
 #--------------------------------------------------------------------------------------------------
 def get_file_version(version_line: str, OFFSET: int) -> Version:
     VERSION = ''
-    for current_char in range(len(version_line)-OFFSET-1):
+    for current_char in range(len(version_line)-OFFSET):
         VERSION += version_line[current_char+OFFSET]
     return parse(VERSION)
 
 def get_current_file_version(OFFSET: int, encoding: _ENCODING = None, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Version:
     with open(__file__, 'r', encoding=encoding) as f:
-        current_line = f.readline()
+        current_line = f.readline().replace('\n','')
     current_version = version_parser(current_line, OFFSET)
     if debug:
         print("Current:", current_version)
