@@ -10,14 +10,12 @@ import traceback
 from github import Github
 from github.ContentFile import ContentFile
 from packaging.version import Version, parse
-from sys import argv, executable#, path
-# from sys import exit as sys_exit
+from sys import argv, executable
 
 from os import path as os_path
 from os import execv as os_execv
 from os import remove as os_remove
-# from subprocess import call as call_subprocess
-from typing import Callable, Tuple, Any, NoReturn, Optional, IO, LiteralString, SupportsIndex, Union, Iterable
+from typing import Callable, Tuple, Any, NoReturn, Optional, IO, LiteralString, SupportsIndex
 from pydantic import BaseModel
 from re import compile as regex_compile
 from requests import get as get_request
@@ -30,7 +28,7 @@ from time import time
 from discord.ext import commands
 from discord import app_commands
 import discord
-from discord.channel import VoiceChannel, StageChannel, TextChannel, ForumChannel, CategoryChannel
+from discord.channel import VoiceChannel, StageChannel, TextChannel
 from discord.threads import Thread
 from datetime import datetime
 from csv import reader as csv_reader
@@ -157,8 +155,8 @@ def restartpythonscript() -> NoReturn:
     logger.debug(f"sys.executable was {executable}")
     logger.info("Shutting down by restart")
     os_execv(__file__, argv)
-    # call_subprocess(["python", os_path.join(path[0], __file__)] + argv[1:])
-    # sys_exit(f"New version ran ({_latest_version})")
+    # call_subprocess(["python", os_path.join(sys.path[0], __file__)] + argv[1:])
+    # sys.exit(f"New version ran ({_latest_version})")
 
 def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version) -> Tuple[Version,Version] | NoReturn:
     logger = logging.getLogger()
