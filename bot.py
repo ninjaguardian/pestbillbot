@@ -1,23 +1,23 @@
-#VERSION - 2.0.0.dev.6
+#VERSION - 2.0.0.dev.7
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on GitHub
 
 import logging
 import traceback
-# import signal
 # import asyncio
 
 from github import Github
 from github.ContentFile import ContentFile
 from packaging.version import Version, parse
-from sys import argv, executable, path
-from sys import exit as sys_exit
+from sys import argv, executable#, path
+# from sys import exit as sys_exit
 
 from os import path as os_path
+from os import execv as os_execv
 from os import remove as os_remove
-from subprocess import call as call_subprocess
-from typing import Callable, Tuple, Any, NoReturn, Optional, IO, LiteralString, SupportsIndex
+# from subprocess import call as call_subprocess
+from typing import Callable, Tuple, Any, NoReturn, Optional, IO, LiteralString, SupportsIndex, Union, Iterable
 from pydantic import BaseModel
 from re import compile as regex_compile
 from requests import get as get_request
@@ -30,6 +30,8 @@ from time import time
 from discord.ext import commands
 from discord import app_commands
 import discord
+from discord.channel import VoiceChannel, StageChannel, TextChannel, ForumChannel, CategoryChannel
+from discord.threads import Thread
 from datetime import datetime
 from csv import reader as csv_reader
 from csv import writer as csv_writer
@@ -60,6 +62,7 @@ _SFTP_CSV_LOC = '/server/plugins/Skript/variables.csv'
 _VER_OFFSET = 11
 type _VERSION_PARSER = Callable[[str,int],Version]
 type _ENCODING = str | None
+type SENDABLE_CHANNEL = VoiceChannel | StageChannel | TextChannel  | Thread
 
 
 #--------------------------------------------------------------------------------------------------
@@ -79,7 +82,7 @@ def get_file_version(version_line: str, OFFSET: int) -> Version:
         VERSION += version_line[current_char+OFFSET]
     return parse(VERSION)
 
-def get_current_file_version(OFFSET: int, encoding: _ENCODING = None, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Version:
+def get_current_file_version(OFFSET: int, encoding: _ENCODING = None, version_parser: _VERSION_PARSER = get_file_version) -> Version:
     """
     Gets the version from the current file.
 
@@ -92,11 +95,11 @@ def get_current_file_version(OFFSET: int, encoding: _ENCODING = None, version_pa
     Returns:
         Version: The file version.
     """
+    logger = logging.getLogger()
     with open(__file__, 'r', encoding=encoding) as f:
         current_line = f.readline().replace('\n','')
     current_version = version_parser(current_line, OFFSET)
-    if debug:
-        print("Current:", current_version)
+    logger.debug("Current:", current_version)
     return current_version
 
 def get_latest_file_contents(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, encoding: _ENCODING = None) -> bytes:
@@ -119,7 +122,7 @@ def get_latest_file_contents(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, 
     assert isinstance(contents, ContentFile)
     return contents.decoded_content
 
-def get_latest_file_version(bytes_file: bytes, OFFSET: int, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Version:
+def get_latest_file_version(bytes_file: bytes, OFFSET: int, version_parser: _VERSION_PARSER = get_file_version) -> Version:
     """
     Gets the lates file version from GitHub.
 
@@ -132,44 +135,44 @@ def get_latest_file_version(bytes_file: bytes, OFFSET: int, version_parser: _VER
     Returns:
         Version: The file version from GitHub.
     """
+    logger = logging.getLogger()
     decoded_str = bytes_file.decode("UTF-8")
     decoded_firstline = decoded_str.splitlines()[0]
     latest_version = version_parser(decoded_firstline, OFFSET)
-    if debug:
-        print("GitHub:", latest_version)
+    logger.debug("GitHub:", latest_version)
     return latest_version
 
-def restartpythonscript(debug: bool = False) -> NoReturn:
+def restartpythonscript() -> NoReturn:
     """
     Restarts the python file. (WARNING: EXITS THE FILE)
 
     Args:
         debug (bool, optional): Enable debug outputs? Defaults to False.
-    """
-    global _latest_version
-    if debug:
-        print("argv was",argv)
-        print(f"sys.executable was {executable}")
-        print("restart now")
-    call_subprocess(["python", os_path.join(path[0], __file__)] + argv[1:])
-    logger.info("Shutting down by restart")
-    sys_exit(f"New version ran ({_latest_version})")
 
-def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version] | NoReturn:
-    current_version = current_version_retriever(OFFSET, encoding, version_parser, debug) #Local
+    Returns:
+        NoReturn: Uses sys_exit
+    """
+    logger = logging.getLogger()
+    logger.debug("argv was",argv)
+    logger.debug(f"sys.executable was {executable}")
+    logger.info("Shutting down by restart")
+    os_execv(__file__, argv)
+    # call_subprocess(["python", os_path.join(path[0], __file__)] + argv[1:])
+    # sys_exit(f"New version ran ({_latest_version})")
+
+def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version) -> Tuple[Version,Version] | NoReturn:
+    logger = logging.getLogger()
+    current_version = current_version_retriever(OFFSET, encoding, version_parser) #Local
     latest_content = latest_content_retriever(GIT_TOKEN_LOC, REPO_LOC, FILE_NAME, encoding)
-    latest_version = latest_version_retriever(latest_content, OFFSET, version_parser, debug) #GitHub
+    latest_version = latest_version_retriever(latest_content, OFFSET, version_parser) #GitHub
     if latest_version>current_version:
-        if debug:
-            print(f"Downloading.... (Found: {latest_version})")
+        logger.debug(f"Downloading.... (Found: {latest_version})")
         with open(__file__, 'wb') as f:
             f.write(latest_content)
-        if debug:
-            print(f"Downloaded and restarting. {latest_version}>{current_version}")
+        logger.debug(f"Downloaded and restarting. {latest_version}>{current_version}")
         restartpythonscript()
     elif current_version>=latest_version:
-        if debug:
-            print(f"No new version found ||GitHub: {latest_version}   Current: {current_version}||")
+        logger.debug(f"No new version found ||GitHub: {latest_version}   Current: {current_version}||")
         return (current_version,latest_version)
     else:
         raise ValueError("Error getting version")
@@ -190,25 +193,46 @@ _CnOpts.hostkeys = None
 with open(_DISCORD_BOT_TOKEN_LOC, 'r') as f:
     BOT_TOKEN = f.read()
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+class Bot(commands.Bot):
+    async def async_cleanup(self, alert_channel: SENDABLE_CHANNEL | None = None) -> None:
+        logger = logging.getLogger()
+        if alert_channel is not None:
+            await alert_channel.send("Shutting down bot!")
+        logger.info('Shutting down bot!')
+    async def close(self, alert_channel: SENDABLE_CHANNEL | None = None) -> None:
+        await self.async_cleanup(alert_channel)
+        return await super().close()
+    def setup_channels(self):
+        self.channels = self._channels()
+
+    class _channels:
+        def __init__(self) -> None:
+            self._channel_ids: dict[str,int] = {}
+        def __getattribute__(self, name: str) -> Any:
+            if name == '_channel_ids':
+                raise AttributeError("To get _channel_ids, run get_channel_id_dict().")
+            else:
+                return super().__getattribute__(name)
+        def get_channel_id(self, nickname: str) -> int | None:
+            if self.if_nickname_exists(nickname):
+                return self._channel_ids[nickname]
+            return None
+        def save_channel_id(self, nickname: str, id: int) -> None:
+            self._channel_ids[nickname] = id
+        def get_channel_id_dict(self) -> dict[str,int]:
+            return self._channel_ids
+        def if_id_exists(self, id: int) -> bool:
+            return id in self._channel_ids.values()
+        def if_nickname_exists(self, nickname: str) -> bool:
+            return nickname in self._channel_ids.keys()
+
+bot = Bot(command_prefix="!", intents=discord.Intents.all())
 
 _PERMISSION_NOT_FOUND_EMBED = discord.Embed()
 _PERMISSION_NOT_FOUND_EMBED.add_field(name="**HEY!**",value=str("""```ansi
 [2;31m[2;31mYou do not have permission to do that![0m[2;31m[0m
 ```"""))
 
-async def handle_sigint(signo,frame):
-    global logger
-    global bot
-    global MOD_ONLY_CHANNEL_ID
-    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-    assert not isinstance(channel,discord.abc.PrivateChannel)
-    assert not isinstance(channel,discord.ForumChannel)
-    assert not isinstance(channel,discord.CategoryChannel)
-    assert channel is not None
-    await channel.send("Shutting down bot!")
-    await bot.close()
-    logger.info('Shutting down from signal.')
 
 def decimal_to_hexadecimal(decimal_num: int) -> str:
     return hex(decimal_num)
@@ -496,7 +520,7 @@ class ExplainErrorButton(discord.ui.View):
 async def on_error(interaction: discord.Interaction, error: app_commands.errors.AppCommandError, /) -> None:
     global bot
     global MOD_ONLY_CHANNEL_ID
-    global logger
+    logger = logging.getLogger()
     logger.error(f'''\x1b[31;1mCommand error\x1b[0m
 \x1b[35m--------------------------------\x1b[34m
 user: <@{interaction.user.id}> ({interaction.user})
@@ -537,6 +561,7 @@ async def on_ready() -> None:
     global _current_version
     global bot
 
+    bot.setup_channels()
     print(f"Bot is ready ({_current_version})")
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
     assert not isinstance(channel,discord.abc.PrivateChannel)
@@ -638,7 +663,7 @@ async def setevent_error(interaction: discord.Interaction, error: app_commands.e
 
 @bot.tree.command(description="Turns bot off")
 @app_commands.check(is_server_owner)
-async def shutdown(ctx: discord.interactions.Interaction) -> NoReturn:
+async def shutdown(ctx: discord.interactions.Interaction) -> None:
     global MOD_ONLY_CHANNEL_ID
     global bot
     global logger
@@ -648,10 +673,9 @@ async def shutdown(ctx: discord.interactions.Interaction) -> NoReturn:
     assert not isinstance(channel,discord.ForumChannel)
     assert not isinstance(channel,discord.CategoryChannel)
     assert channel is not None
-    await channel.send("Shutting down bot!")
+    await channel.send("Recived shutdown command!")
+    logger.info("Recived shutdown command")
     await bot.close()
-    logger.info("Shutting down by command")
-    sys_exit('Bot has shut down!')
 
 @shutdown.error
 async def shutdown_error(interaction: discord.Interaction, error: app_commands.errors.AppCommandError) -> None:
@@ -667,14 +691,16 @@ async def shutdown_error(interaction: discord.Interaction, error: app_commands.e
 async def restartbot(ctx: discord.interactions.Interaction) -> NoReturn:
     global MOD_ONLY_CHANNEL_ID
     global bot
+    global logger
     global _latest_version
-    await ctx.response.send_message("Updating/restarting bot!", ephemeral=True)
+    await ctx.response.send_message(f"Recived restart command. Running {_latest_version}", ephemeral=True)
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
     assert not isinstance(channel,discord.abc.PrivateChannel)
     assert not isinstance(channel,discord.ForumChannel)
     assert not isinstance(channel,discord.CategoryChannel)
     assert channel is not None
-    await channel.send("Updating/restarting bot!")
+    await channel.send(f"Recived restart command. Running {_latest_version}")
+    logger.info(f"Recived restart command. Running {_latest_version}")
     await bot.close()
     restartpythonscript()
 
@@ -912,7 +938,7 @@ Even if the stats file was recently downloaded, new stats are only added after a
 
 
 if __name__ == "__main__":
-    _current_version, _latest_version = update_and_restart(_GITHUB_TOKEN_LOC,"ninjaguardian/pestbillbot",'bot.py',_VER_OFFSET,'utf-8',debug=True)
+    _current_version, _latest_version = update_and_restart(_GITHUB_TOKEN_LOC,"ninjaguardian/pestbillbot",'bot.py',_VER_OFFSET,'utf-8')
 
 
     CHANNEL_ID = 1139304414885183658
