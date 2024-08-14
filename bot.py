@@ -1,10 +1,12 @@
-#VERSION - 2.0.0.dev.5
+#VERSION - 2.0.0.dev.6
 
 # This work is licensed under CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 # By ninjaguardian on GitHub
 
 import logging
 import traceback
+# import signal
+# import asyncio
 
 from github import Github
 from github.ContentFile import ContentFile
@@ -15,7 +17,7 @@ from sys import exit as sys_exit
 from os import path as os_path
 from os import remove as os_remove
 from subprocess import call as call_subprocess
-from typing import Callable, Tuple, Any, NoReturn, Optional, IO
+from typing import Callable, Tuple, Any, NoReturn, Optional, IO, LiteralString, SupportsIndex
 from pydantic import BaseModel
 from re import compile as regex_compile
 from requests import get as get_request
@@ -37,13 +39,12 @@ from aiohttp import ClientSession
 from aiofiles import open as open_async
 from functools import partial
 
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# logger = logging.getLogger('discord')
-# handler = logging.FileHandler(filename=f'./bot_logs/discord_{datetime.now().strftime('%Y-%m-%d_%H.%M.%S')}.log', encoding='utf-8', mode='w')
-# handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-# logger.addHandler(handler)
-# discord.utils.setup_logging(handler=handler)
-#TODO: show discord errors in logs. also get color formatting to work. i saw in setup_logging. Maybe branch off of the one they use and add our log format? check liine :441
+# logging.basicConfig(level=logging.INFO, format='''[{asctime}] [{levelname:<8}] {name}: {message}''',datefmt='%Y-%m-%d %H:%M:%S',style='{')
+logger = logging.getLogger()
+filehandler = logging.FileHandler(filename=f'./bot_logs/discord_{datetime.now().strftime('%Y-%m-%d_%H.%M.%S')}.log', encoding='utf-8', mode='w')
+filehandler.setFormatter(logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', '%Y-%m-%d %H:%M:%S', style='{'))
+logger.addHandler(filehandler)
+discord.utils.setup_logging()
 
 _EVENT_IMAGE_LOC = './eventimage.png'
 _VARS_CSV_LOC = './variables.csv'
@@ -151,6 +152,7 @@ def restartpythonscript(debug: bool = False) -> NoReturn:
         print(f"sys.executable was {executable}")
         print("restart now")
     call_subprocess(["python", os_path.join(path[0], __file__)] + argv[1:])
+    logger.info("Shutting down by restart")
     sys_exit(f"New version ran ({_latest_version})")
 
 def update_and_restart(GIT_TOKEN_LOC: str, REPO_LOC: str, FILE_NAME: str, OFFSET: int, encoding: _ENCODING, current_version_retriever: Callable[[int, _ENCODING, _VERSION_PARSER, bool], Version] = get_current_file_version, latest_version_retriever: Callable[[bytes, int, _VERSION_PARSER, bool], Version] = get_latest_file_version, latest_content_retriever: Callable[[str, str, str, _ENCODING], bytes] = get_latest_file_contents, version_parser: _VERSION_PARSER = get_file_version, debug: bool = False) -> Tuple[Version,Version] | NoReturn:
@@ -195,7 +197,18 @@ _PERMISSION_NOT_FOUND_EMBED.add_field(name="**HEY!**",value=str("""```ansi
 [2;31m[2;31mYou do not have permission to do that![0m[2;31m[0m
 ```"""))
 
-
+async def handle_sigint(signo,frame):
+    global logger
+    global bot
+    global MOD_ONLY_CHANNEL_ID
+    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+    assert not isinstance(channel,discord.abc.PrivateChannel)
+    assert not isinstance(channel,discord.ForumChannel)
+    assert not isinstance(channel,discord.CategoryChannel)
+    assert channel is not None
+    await channel.send("Shutting down bot!")
+    await bot.close()
+    logger.info('Shutting down from signal.')
 
 def decimal_to_hexadecimal(decimal_num: int) -> str:
     return hex(decimal_num)
@@ -340,6 +353,18 @@ def getnewcsv(SFTP_HOST: str, SFTP_PORT: int, SFTP_USERNAME: str, SFTP_PASSWORD:
         if debug:
             print('failed to establish connection to targeted server')
 
+def split_without_remove(string: LiteralString | str, sep: LiteralString | str | None = None, maxsplit: SupportsIndex = -1, beforesplit: bool = True) -> list[LiteralString | str]: #FIXME: sometimes it outputs an empty string at the end. should it?
+    split_string = string.split(sep=sep,maxsplit=maxsplit) #TODO: add rsplit version
+    for loop_idx,_ in enumerate(split_string):
+        if not loop_idx == len(split_string)-1:
+            if sep is None:
+                raise NotImplementedError("I was to lazy. Thy must set sep.") #TODO: Code this
+            else:
+                if beforesplit:
+                    split_string[loop_idx] += sep
+                else:
+                    split_string[loop_idx+1] = sep + split_string[loop_idx+1]
+    return split_string
 
 class Overlay:
     NONE = 0
@@ -438,9 +463,72 @@ def parse_pronoun(pronoun: str) -> ParsedPronoun:
     else:
         return ParsedPronoun.model_validate({'subjective': pronoun,'objective': pronoun,'possessive': pronoun})
 
-# @bot.event
-# async def on_error(event, *args, **kwargs):
-#     logging.warning(traceback.format_exc()) #logs the error
+
+class ExplainErrorButton(discord.ui.View):
+    def __init__(self, stacktrace_list: list[str], *, timeout: float | None = 180):
+        super().__init__(timeout=timeout)
+        self.stacktrace_list = stacktrace_list
+
+    @discord.ui.button(label='Send Stacktrace', style=discord.ButtonStyle.blurple)
+    async def button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for idx, loop_stacktrace in enumerate(self.stacktrace_list):
+            button_message = f'''# Stacktrace p{idx+1}\n```py
+{loop_stacktrace}
+```'''
+            if idx == 0:
+                await interaction.response.send_message(button_message)
+            else:
+                await interaction.followup.send(button_message)
+
+    @discord.ui.button(label='Send Stacktrace Embed', style=discord.ButtonStyle.green)
+    async def button_embed(self, interaction: discord.Interaction, button: discord.ui.Button): #TODO: combine if < 1000
+        EMBED=discord.Embed(title="Stacktrace", color=int('0a63f2', 16))
+        for idx, loop_stacktrace in enumerate(self.stacktrace_list):
+            if len(loop_stacktrace) > 1000:
+                raise NotImplementedError #TODO: NotImplementedError stacktrace>1000
+            else:
+                EMBED.add_field(value=f'''```py
+{loop_stacktrace}
+```''', name=f"Stacktrace p{idx+1}", inline=False)
+        await interaction.response.send_message(embed=EMBED)
+
+@bot.tree.error
+async def on_error(interaction: discord.Interaction, error: app_commands.errors.AppCommandError, /) -> None:
+    global bot
+    global MOD_ONLY_CHANNEL_ID
+    global logger
+    logger.error(f'''\x1b[31;1mCommand error\x1b[0m
+\x1b[35m--------------------------------\x1b[34m
+user: <@{interaction.user.id}> ({interaction.user})
+namespace: {interaction.namespace}
+type: {interaction.type}{'\nmessage: '+str(interaction.message) if interaction.type == discord.InteractionType.component else ''}
+data:
+{interaction.data}
+\x1b[35m--------------------------------
+\x1b[31m'''+traceback.format_exc()+'\x1b[0m')
+
+
+
+    channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+    assert not isinstance(channel,discord.abc.PrivateChannel)
+    assert not isinstance(channel,discord.ForumChannel)
+    assert not isinstance(channel,discord.CategoryChannel)
+    assert channel is not None
+
+    KDR_EMBED_ALERT=discord.Embed(title="Someone had an error!!", color=int('fa2d1e', 16))
+    KDR_EMBED_ALERT.add_field(value=f'''
+user: <@{interaction.user.id}> ({interaction.user})
+namespace: {interaction.namespace}
+interaction type: {interaction.type}{'\nmessage: '+str(interaction.message) if interaction.type == discord.InteractionType.component else ''}
+''', name="Helful info", inline=False)
+    KDR_EMBED_ALERT.add_field(value=f'''
+```py
+{interaction.data}
+```
+''', name="Data", inline=False)
+    error_stacktrace = traceback.format_exc().replace(r'C:\Users\carte','[user]') #TODO: change to regex
+    stacktrace_list = split_without_remove(error_stacktrace,'Traceback (most recent call last):',beforesplit=False)[1:]
+    await channel.send(content="",embed=KDR_EMBED_ALERT, view=ExplainErrorButton(stacktrace_list))
 
 #Boot message
 @bot.event
@@ -448,6 +536,7 @@ async def on_ready() -> None:
     global MOD_ONLY_CHANNEL_ID
     global _current_version
     global bot
+
     print(f"Bot is ready ({_current_version})")
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
     assert not isinstance(channel,discord.abc.PrivateChannel)
@@ -540,10 +629,10 @@ async def setevent(ctx: discord.interactions.Interaction, event: str|None=None, 
 
 
 @setevent.error
-async def setevent_error(interaction: discord.Interaction, error) -> None:
+async def setevent_error(interaction: discord.Interaction, error: app_commands.errors.AppCommandError) -> None:
     global _PERMISSION_NOT_FOUND_EMBED
     if is_server_owner(interaction):
-        await interaction.response.send_message(f"Don't add a #, add one of the https:// things. | {error}", ephemeral=True)
+        await interaction.response.send_message(f"Don't add a #, add one of the https:// things. Check logs for more info. | {error}", ephemeral=True)
     else:
         await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
@@ -552,6 +641,7 @@ async def setevent_error(interaction: discord.Interaction, error) -> None:
 async def shutdown(ctx: discord.interactions.Interaction) -> NoReturn:
     global MOD_ONLY_CHANNEL_ID
     global bot
+    global logger
     await ctx.response.send_message("Bot is being shut down...", ephemeral=True)
     channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
     assert not isinstance(channel,discord.abc.PrivateChannel)
@@ -560,13 +650,14 @@ async def shutdown(ctx: discord.interactions.Interaction) -> NoReturn:
     assert channel is not None
     await channel.send("Shutting down bot!")
     await bot.close()
+    logger.info("Shutting down by command")
     sys_exit('Bot has shut down!')
 
 @shutdown.error
-async def shutdown_error(interaction: discord.Interaction, error) -> None:
+async def shutdown_error(interaction: discord.Interaction, error: app_commands.errors.AppCommandError) -> None:
     global _PERMISSION_NOT_FOUND_EMBED
     if is_server_owner(interaction):
-        await interaction.response.send_message(f"idk what went wrong... {error}", ephemeral=True)
+        await interaction.response.send_message(f"idk what went wrong... Check logs for more info. {error}", ephemeral=True)
     else:
         await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
@@ -588,10 +679,10 @@ async def restartbot(ctx: discord.interactions.Interaction) -> NoReturn:
     restartpythonscript()
 
 @restartbot.error
-async def restartbot_error(interaction: discord.Interaction, error) -> None:
+async def restartbot_error(interaction: discord.Interaction, error: app_commands.errors.AppCommandError) -> None:
     global _PERMISSION_NOT_FOUND_EMBED
     if is_server_owner(interaction):
-        await interaction.edit_original_response(content=f"idk what went wrong... {error}")
+        await interaction.edit_original_response(content=f"idk what went wrong... Check logs for more info. {error}")
     else:
         await interaction.response.send_message(embed=_PERMISSION_NOT_FOUND_EMBED, ephemeral=True)
 
@@ -614,31 +705,6 @@ async def topkdr(interaction: discord.Interaction) -> None:
     await interaction.edit_original_response(content=f"Loading... (getting {topkdrname}'s data)")
     await getkdr_nonbot(topkdrname,interaction,topkdrresponsetimestart)
 
-@topkdr.error
-async def topkdr_error(interaction: discord.Interaction, error) -> None:
-    global bot
-    global MOD_ONLY_CHANNEL_ID
-    if is_server_owner(interaction):
-        await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
-    else:
-        KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING TOPKDR!", color=int('fa2d1e', 16))
-        KDR_EMBED_ERROR.add_field(value='''> The player's name is CASE-SENSITIVE! Make sure you spelled it perfectly with no spaces.
-> The player may have had their stats wiped due to them being low.
-> The player may have not joined the game before.
-> DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
-        channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-        assert not isinstance(channel,discord.abc.PrivateChannel)
-        assert not isinstance(channel,discord.ForumChannel)
-        assert not isinstance(channel,discord.CategoryChannel)
-        assert channel is not None
-        await channel.send(f'''Someone had a kdr error!
-
-ctx: {interaction}
-
-error: {error}''')
-        await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
-
-
 @bot.tree.command(description="Gets a player's kdr")
 @app_commands.describe(player = "The player to check")
 async def kdr(interaction: discord.Interaction, player: str) -> None:
@@ -646,28 +712,54 @@ async def kdr(interaction: discord.Interaction, player: str) -> None:
     await getkdr_nonbot(player,interaction,time())
 
 @kdr.error
-async def kdr_error(interaction: discord.Interaction, error) -> None:
+async def kdr_error(interaction: discord.Interaction, error: app_commands.errors.AppCommandError) -> None:
     global bot
     global MOD_ONLY_CHANNEL_ID
-    if is_server_owner(interaction):
-        await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
-    else:
-        KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING TOPKDR!", color=int('fa2d1e', 16))
-        KDR_EMBED_ERROR.add_field(value='''> The player's name may violate naming rules.
+#     global logger
+
+#     logger.error(f'''\x1b[31;1mKDR error\x1b[0m
+# \x1b[35m--------------------------------\x1b[34m
+# user: <@{interaction.user.id}> ({interaction.user})
+# namespace: {interaction.namespace}
+# interaction type: {interaction.type}{'\nmessage: '+str(interaction.message) if interaction.type == discord.InteractionType.component else ''}
+# data:
+# {interaction.data}
+# \x1b[35m--------------------------------
+# \x1b[31m'''+traceback.format_exc()+'\x1b[0m')
+
+    # if is_server_owner(interaction):
+    #     await interaction.edit_original_response(content=f"Hello owner! This is the error: {error}")
+    # else:
+    KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING KDR!", color=int('fa2d1e', 16))
+    KDR_EMBED_ERROR.add_field(value='''> The player's name may violate naming rules.
 > The player may have had their stats wiped due to them being low.
 > The player may have not joined the game before.
+> There may have been some bug that occured.
+> Report the bug in <#1170117676518101013>
 > DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
-        channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
-        assert not isinstance(channel,discord.abc.PrivateChannel)
-        assert not isinstance(channel,discord.ForumChannel)
-        assert not isinstance(channel,discord.CategoryChannel)
-        assert channel is not None
-        await channel.send(f'''Someone had a topkdr error!
 
-ctx: {interaction}
 
-error: {error}''')
-        await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
+    # channel = bot.get_channel(MOD_ONLY_CHANNEL_ID)
+    # assert not isinstance(channel,discord.abc.PrivateChannel)
+    # assert not isinstance(channel,discord.ForumChannel)
+    # assert not isinstance(channel,discord.CategoryChannel)
+    # assert channel is not None
+
+    # KDR_EMBED_ALERT=discord.Embed(title="Someone had a kdr error!!", color=int('fa2d1e', 16))
+    # KDR_EMBED_ALERT.add_field(value=f'''
+# user: <@{interaction.user.id}> ({interaction.user})
+# namespace: {interaction.namespace}
+# interaction type: {interaction.type}{'\nmessage: '+str(interaction.message) if interaction.type == discord.InteractionType.component else ''}
+# ''', name="Helful info", inline=False)
+    # KDR_EMBED_ALERT.add_field(value=f'''
+# ```py
+# {interaction.data}
+# ```
+# ''', name="Data", inline=False)
+    # error_stacktrace = traceback.format_exc().replace(r'C:\Users\carte','[user]') #FIXME: change to regex
+    # stacktrace_list = split_without_remove(error_stacktrace,'Traceback (most recent call last):',beforesplit=False)[1:]
+    # await channel.send(content="",embed=KDR_EMBED_ALERT, view=ExplainErrorButton(stacktrace_list))
+    await interaction.edit_original_response(content="",embed=KDR_EMBED_ERROR)
 
 
 
@@ -690,7 +782,7 @@ async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrrespon
         await interaction.edit_original_response(content="Loading... (Error: Can't access API. Falling back to manual.)")
         manual_uuid = get_uuid_manual(player)
         if manual_uuid is None:
-            raise NotImplementedError("Player is not registered") #FIXME:
+            raise NotImplementedError("Player is not registered") #FIXME: NotImplementedError("Player is not registered")
         else:
             player_uuid = manual_uuid
             player_skin = None
@@ -700,7 +792,7 @@ async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrrespon
             else:
                 player_spelled = temp_name
     elif isinstance(player_data,ValidationError):
-        raise NotImplementedError("Player does not exist") #FIXME:
+        raise NotImplementedError("Player does not exist") #FIXME: NotImplementedError("Player does not exist")
     else:
         raise ValueError("player_data uknown type")
 
@@ -708,8 +800,9 @@ async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrrespon
 
     timestamp = ''
     kills = 0
-    deaths = 0
+    deaths = 1
     topkdrname = ''
+    player_exists = False
 
     with open(_VARS_CSV_LOC) as file:
         for idx,row in enumerate(csv_reader(file)):
@@ -718,8 +811,10 @@ async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrrespon
                     timestamp = row[0]
                 if row[0] == f"kills::{player_uuid}":
                     kills=hexadecimal_to_decimal(row[2])
+                    player_exists = True
                 if row[0] == f"deaths::{player_uuid}":
                     deaths=hexadecimal_to_decimal(row[2])
+                    player_exists = True
                 if row[0] == "topkdrname":
                     topkdrname=hex_to_ascii(row[2][5:])
             except IndexError:
@@ -727,76 +822,92 @@ async def getkdr_nonbot(player: str, interaction: discord.Interaction, kdrrespon
 
     await interaction.edit_original_response(content="Loading... (Finalizing)")
 
-    if player_skin is None:
-        head_img: str | Image.Image = f'https://mc-heads.net/combo/{player}'
-        attachment_file = None
-    else:
-        try:
-            response = get_request(player_skin,timeout=20)
-            head_img = get_head(BytesIO(response.content))
-            head_img.save('./head.png')
-            attachment_file = discord.File('./head.png')
-        except RequestTimeoutError:
-            head_img = f'https://mc-heads.net/combo/{player}'
+    if player_exists:
+
+        if player_skin is None:
+            head_img: str | Image.Image = f'https://mc-heads.net/combo/{player}'
             attachment_file = None
+        else:
+            try:
+                response = get_request(player_skin,timeout=20)
+                head_img = get_head(BytesIO(response.content))
+                head_img.save('./head.png')
+                attachment_file = discord.File('./head.png')
+            except RequestTimeoutError:
+                head_img = f'https://mc-heads.net/combo/{player}'
+                attachment_file = None
 
-    if topkdrname.lower() == player.lower():
-        await interaction.edit_original_response(content="Loading... (Getting pronouns)")
-        KDR_EMBED=discord.Embed(title=f"{player_spelled}'s KDR", color=int('e0bd00', 16))
-        pronouns = fetch_pronouns(player_uuid)
-        if len(pronouns) == 0:
-            pronouns = ['they']
-        match pronouns[0]:
-            case 'he':
-                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
-                has_or_have = 'has'
-            case 'it':
-                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
-                has_or_have = 'has'
-            case 'she':
-                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
-                has_or_have = 'has'
-            case 'avoid':
-                subjective_pronoun = player_spelled
-                has_or_have = 'has'
-            case 'they':
-                subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
-                has_or_have = 'have'
-            case _:
-                match pronouns[1]:
-                    case 'he':
-                        subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
-                        has_or_have = 'has'
-                    case 'it':
-                        subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
-                        has_or_have = 'has'
-                    case 'she':
-                        subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
-                        has_or_have = 'has'
-                    case 'avoid':
-                        subjective_pronoun = player_spelled
-                        has_or_have = 'has'
-                    case _:
-                        subjective_pronoun = parse_pronoun('they').subjective.capitalize()
-                        has_or_have = 'have'
+        if topkdrname.lower() == player.lower():
+            await interaction.edit_original_response(content="Loading... (Getting pronouns)")
+            KDR_EMBED=discord.Embed(title=f"{player_spelled}'s KDR", color=int('e0bd00', 16))
+            pronouns = fetch_pronouns(player_uuid)
+            if len(pronouns) == 0:
+                pronouns = ['they']
+            match pronouns[0]:
+                case 'he':
+                    subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                    has_or_have = 'has'
+                case 'it':
+                    subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                    has_or_have = 'has'
+                case 'she':
+                    subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                    has_or_have = 'has'
+                case 'avoid':
+                    subjective_pronoun = player_spelled
+                    has_or_have = 'has'
+                case 'they':
+                    subjective_pronoun = parse_pronoun(pronouns[0]).subjective.capitalize()
+                    has_or_have = 'have'
+                case _:
+                    match pronouns[1]:
+                        case 'he':
+                            subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
+                            has_or_have = 'has'
+                        case 'it':
+                            subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
+                            has_or_have = 'has'
+                        case 'she':
+                            subjective_pronoun = parse_pronoun(pronouns[1]).subjective.capitalize()
+                            has_or_have = 'has'
+                        case 'avoid':
+                            subjective_pronoun = player_spelled
+                            has_or_have = 'has'
+                        case _:
+                            subjective_pronoun = parse_pronoun('they').subjective.capitalize()
+                            has_or_have = 'have'
 
-        KDR_EMBED.add_field(value=f'''{player_spelled}'s KDR is {round(kills/deaths,2)}!
+            KDR_EMBED.add_field(value=f'''{player_spelled}'s KDR is {round(kills/deaths,2)}!
 {subjective_pronoun} also {has_or_have} the **top kdr**!''', name="KDR", inline=False)
-    else:
-        KDR_EMBED=discord.Embed(title=f"{player_spelled}'s KDR", color=int('fa2d1e', 16))
-        KDR_EMBED.add_field(value=f"{player_spelled}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
-    await interaction.edit_original_response(content="Loading... (Sending)")
-    KDR_EMBED.add_field(value=f"{player_spelled}'s has {kills} kills!", name="Kills", inline=False)
-    KDR_EMBED.add_field(value=f'''{player_spelled}'s has {deaths} deaths!''', name="Deaths", inline=False)
-    KDR_EMBED.set_thumbnail(url='attachment://head.png')
-    KDR_EMBED.set_footer(text=f'''{timestamp}
+        else:
+            KDR_EMBED=discord.Embed(title=f"{player_spelled}'s KDR", color=int('fa2d1e', 16))
+            KDR_EMBED.add_field(value=f"{player_spelled}'s KDR is {round(kills/deaths,2)}!", name="KDR", inline=False)
+        await interaction.edit_original_response(content="Loading... (Sending)")
+        KDR_EMBED.add_field(value=f"{player_spelled}'s has {kills} kills!", name="Kills", inline=False)
+        KDR_EMBED.add_field(value=f'''{player_spelled}'s has {deaths} deaths!''', name="Deaths", inline=False)
+        KDR_EMBED.set_thumbnail(url='attachment://head.png')
+        KDR_EMBED.set_footer(text=f'''{timestamp}
 Even if the stats file was recently downloaded, new stats are only added after a restart.''')
-    kdrresponsetimeend = time()
-    kdrresponsetime = kdrresponsetimeend-kdrresponsetimestart
-    if attachment_file is None:
-        await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED)
+        kdrresponsetimeend = time()
+        kdrresponsetime = kdrresponsetimeend-kdrresponsetimestart
+        if attachment_file is None:
+            await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED)
+        else:
+            await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED,attachments=[attachment_file])
     else:
-        await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED,attachments=[attachment_file])
+        KDR_EMBED_ERROR=discord.Embed(title="ERROR WHILE FETCHING KDR!", color=int('fa2d1e', 16))
+        KDR_EMBED_ERROR.add_field(value='''> The player's name may violate naming rules.
+> The player may have had their stats wiped due to them being low.
+> The player may have not joined the game before.
+> There may have been some bug that occured.
+> Report the bug in <#1170117676518101013>
+> DM <@733487800124571679> for more help!''', name="Common mistakes", inline=False)
+        KDR_EMBED_ERROR.set_footer(text=f'''{timestamp}
+Even if the stats file was recently downloaded, new stats are only added after a restart.''')
+        kdrresponsetimeend = time()
+        kdrresponsetime = kdrresponsetimeend-kdrresponsetimestart
+        await interaction.edit_original_response(content=f"Time taken ≈ {kdrresponsetime} seconds",embed=KDR_EMBED_ERROR)
+
 
 
 
@@ -809,4 +920,6 @@ if __name__ == "__main__":
     BYPASS_ROLE = 1139294768090853536
     PESTBILL_ID = 1139292425353973790
 
-    bot.run(BOT_TOKEN)
+    bot.run(BOT_TOKEN,log_handler=None)
+
+#FIXME: paramiko.transport Authentication (password) failed. occurs in all http requests
